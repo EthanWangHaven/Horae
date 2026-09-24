@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/icon.png" width="110" alt="Horae"/>
+</p>
+
 # Horae
 
 Horae 是一款 Android 原生日程看板应用，采用 iOS 液态玻璃（Liquid Glass）视觉风格，提供周视图看板、日程管理、提醒等功能。
@@ -53,9 +57,3 @@ app/src/main/java/com/horae/app/
     ├── common/            # 公共 UI 组件
     └── theme/             # 颜色与主题
 ```
-
-## 作者
-
-**wangce**
-
-开源地址：[https://github.com/EthanWangHaven/Horae](https://github.com/EthanWangHaven/Horae)
