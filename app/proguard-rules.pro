@@ -1,0 +1,1 @@
+# Horae proguard rules

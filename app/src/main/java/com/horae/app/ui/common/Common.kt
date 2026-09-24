@@ -1,0 +1,170 @@
+package com.horae.app.ui.common
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
+import com.horae.app.ui.glass.LocalWallSize
+import com.horae.app.ui.glass.Wall
+import com.horae.app.ui.glass.liquidGlass
+import com.horae.app.ui.theme.Ink
+import com.horae.app.ui.theme.SubText
+
+/** 每个屏幕的根布局：绘制全局壁纸并向玻璃面板提供尺寸 */
+@Composable
+fun GlassScreenRoot(
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    var size by remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .onSizeChanged { size = it.toSize() }
+            .drawBehind { if (!size.isEmpty()) Wall.draw(this, size) },
+    ) {
+        CompositionLocalProvider(LocalWallSize provides size) {
+            content()
+        }
+    }
+}
+
+/** 圆形玻璃图标按钮 */
+@Composable
+fun GlassIconButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    tint: Color = Ink,
+    iconSize: Int = 20,
+) {
+    Box(
+        modifier = modifier
+            .size(38.dp)
+            .liquidGlass(shape = CircleShape, tintAlpha = 0.6f, blurRadius = 16.dp)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier.size(iconSize.dp),
+        )
+    }
+}
+
+/** 玻璃分组卡片（编辑页的分组容器） */
+@Composable
+fun GlassSection(
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.() -> Unit = {},
+) {
+    Row(
+        modifier = modifier
+            .liquidGlass(shape = RoundedCornerShape(20.dp), tintAlpha = 0.62f, blurRadius = 20.dp)
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        content()
+    }
+}
+
+/** 设置行：左侧图标 + 标签，右侧值与下拉箭头 */
+@Composable
+fun SettingsRow(
+    icon: ImageVector?,
+    label: String,
+    modifier: Modifier = Modifier,
+    value: String? = null,
+    valuePlaceholder: String? = null,
+    valueColor: Color = SubText,
+    onClick: (() -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        modifier = modifier
+            .padding(vertical = 12.dp)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        icon?.let {
+            Icon(
+                imageVector = it,
+                contentDescription = null,
+                tint = Ink,
+                modifier = Modifier.size(20.dp),
+            )
+            androidx.compose.foundation.layout.Spacer(Modifier.size(10.dp))
+        }
+        Text(
+            text = label,
+            style = TextStyle(fontSize = MaterialTheme.typography.bodyLarge.fontSize),
+            color = Ink,
+        )
+        androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+        if (value != null) {
+            Text(text = value, color = Ink)
+        }
+        if (valuePlaceholder != null) {
+            Text(text = valuePlaceholder, color = valueColor)
+        }
+        trailing?.invoke()
+    }
+}
+
+/** 无涟漪点击（用于自绘玻璃/色块） */
+fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier = composed {
+    clickable(
+        interactionSource = remember { MutableInteractionSource() },
+        indication = null,
+        onClick = onClick,
+    )
+}
+
+/** 主色文字按钮（如「保存」） */
+@Composable
+fun AccentTextButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    color: Color = MaterialTheme.colorScheme.primary,
+) {
+    Text(
+        text = text,
+        color = if (enabled) color else color.copy(alpha = 0.4f),
+        fontWeight = FontWeight.SemiBold,
+        modifier = modifier
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+    )
+}
