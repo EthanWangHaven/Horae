@@ -1,5 +1,7 @@
 package com.horae.app.logic
 
+import com.horae.app.data.RepeatEnd
+import com.horae.app.data.RepeatFreq
 import com.horae.app.data.RepeatType
 import com.horae.app.data.ScheduleEntity
 import java.time.DayOfWeek
@@ -52,8 +54,41 @@ object ScheduleLogic {
             RepeatType.WEEKDAYS -> !day.isBefore(startDay) &&
                 day.dayOfWeek != DayOfWeek.SATURDAY && day.dayOfWeek != DayOfWeek.SUNDAY
             RepeatType.MONTHLY -> !day.isBefore(startDay) && day.dayOfMonth == startDay.dayOfMonth
+            RepeatType.CUSTOM -> customOccursOn(s, day)
             else -> day == startDay
         }
+    }
+
+    /** 自定义重复判定：频率 + 间隔 + 结束方式（日期/次数） */
+    private fun customOccursOn(s: ScheduleEntity, day: LocalDate): Boolean {
+        val startDay = startDayOf(s)
+        if (day.isBefore(startDay)) return false
+        val interval = s.repeatInterval.coerceAtLeast(1)
+        val period: Long = when (s.repeatFreq) {
+            RepeatFreq.DAY -> java.time.temporal.ChronoUnit.DAYS.between(startDay, day)
+            RepeatFreq.WEEK -> {
+                if (day.dayOfWeek != startDay.dayOfWeek) return false
+                java.time.temporal.ChronoUnit.WEEKS.between(startDay, day)
+            }
+            RepeatFreq.MONTH -> {
+                if (day.dayOfMonth != startDay.dayOfMonth) return false
+                java.time.temporal.ChronoUnit.MONTHS.between(startDay, day)
+            }
+            RepeatFreq.YEAR -> {
+                if (day.month != startDay.month || day.dayOfMonth != startDay.dayOfMonth) return false
+                java.time.temporal.ChronoUnit.YEARS.between(startDay, day)
+            }
+            else -> return false
+        }
+        if (period < 0 || period % interval != 0L) return false
+        when (s.repeatEndType) {
+            RepeatEnd.UNTIL -> {
+                val endDay = toLocal(s.repeatEndDate).toLocalDate()
+                if (day.isAfter(endDay)) return false
+            }
+            RepeatEnd.COUNT -> if (period / interval + 1 > s.repeatCount) return false
+        }
+        return true
     }
 
     /**
@@ -159,7 +194,22 @@ object ScheduleLogic {
         RepeatType.WEEKLY -> "每周"
         RepeatType.WEEKDAYS -> "工作日"
         RepeatType.MONTHLY -> "每月"
+        RepeatType.CUSTOM -> "自定义"
         else -> "永不"
+    }
+
+    /** 自定义重复的显示文案：每 N 天/周/月/年 */
+    fun customRepeatLabel(freq: Int, interval: Int): String {
+        val unit = freqUnit(freq)
+        return if (interval <= 1) "每$unit" else "每 $interval $unit"
+    }
+
+    fun freqUnit(freq: Int): String = when (freq) {
+        RepeatFreq.DAY -> "天"
+        RepeatFreq.WEEK -> "周"
+        RepeatFreq.MONTH -> "月"
+        RepeatFreq.YEAR -> "年"
+        else -> "周"
     }
 
     fun remindLabel(minutes: Int): String = when (minutes) {
@@ -174,6 +224,6 @@ object ScheduleLogic {
 
     val remindOptions = listOf(-1, 0, 5, 15, 30, 60)
     val repeatOptions = listOf(
-        RepeatType.NONE, RepeatType.DAILY, RepeatType.WEEKLY, RepeatType.WEEKDAYS, RepeatType.MONTHLY
+        RepeatType.NONE, RepeatType.DAILY, RepeatType.WEEKLY, RepeatType.WEEKDAYS, RepeatType.MONTHLY, RepeatType.CUSTOM
     )
 }

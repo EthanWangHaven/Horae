@@ -1,10 +1,17 @@
 package com.horae.app
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -36,6 +43,18 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun HoraeApp() {
     val nav = rememberNavController()
+
+    // Android 13+ 必须动态请求通知权限，否则提醒通知无法展示
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+        ) {
+            permLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     NavHost(navController = nav, startDestination = "board") {
         // 周视图看板（首页）
