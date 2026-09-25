@@ -1,9 +1,18 @@
 package com.horae.app.ui.board
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.AnimationState
 import androidx.compose.animation.core.DecayAnimationSpec
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDecay
 import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
@@ -14,8 +23,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,6 +42,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
@@ -47,8 +60,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -137,6 +148,9 @@ fun BoardScreen(
     var detailOcc by remember { mutableStateOf<Occurrence?>(null) }
     var detailDayMillis by remember { mutableStateOf(0L) }
 
+    // 顶部标题栏折叠状态（记住上次状态，持久化到 AppSettings）
+    var headerCollapsed by remember { mutableStateOf(AppSettings.boardHeaderCollapsed) }
+
     // 默认竖直滚动位置（7:00 横线贴顶，8:00 字样刚好露出）
     var defaultScrollPx by remember { mutableStateOf(0f) }
 
@@ -152,21 +166,51 @@ fun BoardScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
         ) {
-            // ---------- 顶部标题栏 ----------
-            BoardHeader(
-                today = today,
-                onOpenList = onOpenList,
-                onMenuClick = { menuOpen = true },
-                onMenuAnchorChange = { menuAnchor = it },
-            )
+            // ---------- 顶部标题栏（可折叠收纳到纵轴交点）：垂直卷起/展开 + 淡化 ----------
+            AnimatedVisibility(
+                visible = !headerCollapsed,
+                enter = expandVertically(
+                    expandFrom = Alignment.Top,
+                    animationSpec = tween(196, easing = FastOutSlowInEasing),
+                ) + fadeIn(animationSpec = tween(196)),
+                exit = shrinkVertically(
+                    shrinkTowards = Alignment.Top,
+                    animationSpec = tween(196, easing = FastOutSlowInEasing),
+                ) + fadeOut(animationSpec = tween(126)),
+            ) {
+                Column {
+                    BoardHeader(
+                        today = today,
+                        onOpenList = onOpenList,
+                        onAdd = {
+                            val nextHour = java.time.LocalDateTime.now()
+                                .plusHours(1).truncatedTo(java.time.temporal.ChronoUnit.HOURS)
+                            onAdd(
+                                nextHour.atZone(java.time.ZoneId.systemDefault())
+                                    .toInstant().toEpochMilli()
+                            )
+                        },
+                        onMenuClick = { menuOpen = true },
+                        onMenuAnchorChange = { menuAnchor = it },
+                        onCollapse = {
+                            headerCollapsed = true
+                            AppSettings.updateBoardHeaderCollapsed(true)
+                        },
+                    )
+                    Spacer(Modifier.height(6.dp))
+                }
+            }
 
-            Spacer(Modifier.height(6.dp))
-
-            // ---------- 星期表头：一 二 三 ... + 日期 ----------
+            // ---------- 星期表头：一 二 三 ... + 日期（折叠时交点处显示展开按钮） ----------
             WeekHeaderRow(
                 weekStart = currentWeekStart,
                 today = today,
                 axisWidth = axisWidth,
+                collapsed = headerCollapsed,
+                onExpand = {
+                    headerCollapsed = false
+                    AppSettings.updateBoardHeaderCollapsed(false)
+                },
             )
 
             // ---------- 全天日程条 ----------
@@ -228,40 +272,6 @@ fun BoardScreen(
                         }
                     }
                 }
-            }
-        }
-
-        // ---------- 悬浮添加按钮 ----------
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 24.dp, bottom = 40.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(58.dp)
-                    .liquidGlass(shape = CircleShape, tintAlpha = 0.72f, blurRadius = 18.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "添加日程",
-                    tint = AccentBlue,
-                    modifier = Modifier.size(28.dp),
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(CircleShape)
-                        .clickableNoRipple {
-                            val nextHour = java.time.LocalDateTime.now()
-                                .plusHours(1).truncatedTo(java.time.temporal.ChronoUnit.HOURS)
-                            onAdd(
-                                nextHour.atZone(java.time.ZoneId.systemDefault())
-                                    .toInstant().toEpochMilli()
-                            )
-                        }
-                )
             }
         }
 
@@ -395,36 +405,38 @@ fun BoardScreen(
 private fun BoardHeader(
     today: LocalDate,
     onOpenList: () -> Unit,
+    onAdd: () -> Unit,
     onMenuClick: () -> Unit,
     onMenuAnchorChange: (Rect) -> Unit,
+    onCollapse: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .liquidGlass(shape = RoundedCornerShape(24.dp), tintAlpha = 0.6f, blurRadius = 20.dp)
-            .padding(horizontal = 18.dp, vertical = 12.dp),
+            .padding(horizontal = 18.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = ScheduleLogic.boardTitle(today),
-                fontSize = 26.sp,
-                fontWeight = FontWeight.Bold,
-                color = Ink,
-            )
-            Text(
-                text = ScheduleLogic.weekLabel(today),
-                fontSize = 13.sp,
-                color = SubText,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-        }
+        Text(
+            text = ScheduleLogic.boardTitle(today),
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Bold,
+            color = Ink,
+            modifier = Modifier.weight(1f),
+        )
+        GlassIconButton(
+            icon = Icons.Default.Add,
+            contentDescription = "添加日程",
+            onClick = onAdd,
+            tint = AccentBlue,
+        )
+        Spacer(Modifier.width(7.dp))
         GlassIconButton(
             icon = Icons.Default.Menu,
             contentDescription = "日程列表",
             onClick = onOpenList,
         )
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(7.dp))
         Box(
             modifier = Modifier.onGloballyPositioned { onMenuAnchorChange(it.boundsInRoot()) },
         ) {
@@ -434,6 +446,12 @@ private fun BoardHeader(
                 onClick = onMenuClick,
             )
         }
+        Spacer(Modifier.width(7.dp))
+        GlassIconButton(
+            icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+            contentDescription = "收起标题栏",
+            onClick = onCollapse,
+        )
     }
 }
 
@@ -442,13 +460,45 @@ private fun WeekHeaderRow(
     weekStart: LocalDate,
     today: LocalDate,
     axisWidth: Float,
+    collapsed: Boolean = false,
+    onExpand: () -> Unit = {},
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .height(IntrinsicSize.Min)
             .padding(vertical = 4.dp)
     ) {
-        Spacer(Modifier.width(with(LocalDensity.current) { axisWidth.toDp() }))
+        // 纵轴与星期表头交点：折叠时淡入圆形玻璃展开按钮（居中于交点）
+        Box(
+            modifier = Modifier
+                .width(with(LocalDensity.current) { axisWidth.toDp() })
+                .fillMaxHeight(),
+            contentAlignment = Alignment.Center,
+        ) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = collapsed,
+                enter = fadeIn(animationSpec = tween(154)) +
+                    scaleIn(initialScale = 0.6f, animationSpec = tween(154)),
+                exit = fadeOut(animationSpec = tween(112)) +
+                    scaleOut(targetScale = 0.6f, animationSpec = tween(112)),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .liquidGlass(shape = CircleShape, tintAlpha = 0.8f, blurRadius = 10.dp)
+                        .clickableNoRipple(onExpand),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = "展开标题栏",
+                        tint = AccentBlue,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
+        }
         repeat(DAY_COLUMN_COUNT) { idx ->
             val day = weekStart.plusDays(idx.toLong())
             val isToday = day == today

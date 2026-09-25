@@ -3,6 +3,7 @@ package com.horae.app.data
 import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 /**
@@ -15,6 +16,7 @@ object AppSettings {
     private const val KEY_START = "axis_start_hour"
     private const val KEY_END = "axis_end_hour"
     private const val KEY_SENS = "scroll_sensitivity"
+    private const val KEY_HEADER_COLLAPSED = "board_header_collapsed"
 
     /** 看板背景主题序号（0 起，上界由 Wall.BoardThemes 决定） */
     var themeIndex by mutableIntStateOf(0)
@@ -32,6 +34,10 @@ object AppSettings {
     var sensitivity by mutableIntStateOf(4)
         private set
 
+    /** 看板顶部标题栏是否折叠（记住上次状态） */
+    var boardHeaderCollapsed by mutableStateOf(false)
+        private set
+
     /** 灵敏度挡位对应的滚动位移/惯性乘数 */
     val sensitivityFactor: Float
         get() = floatArrayOf(0.72f, 0.96f, 1.2f, 1.5f, 1.8f)[(sensitivity - 1).coerceIn(0, 4)]
@@ -44,6 +50,7 @@ object AppSettings {
             axisStartHour = it.getInt(KEY_START, 7)
             axisEndHour = it.getInt(KEY_END, 23)
             sensitivity = it.getInt(KEY_SENS, 4)
+            boardHeaderCollapsed = it.getBoolean(KEY_HEADER_COLLAPSED, false)
         }
     }
 
@@ -64,5 +71,10 @@ object AppSettings {
     fun updateSensitivity(v: Int) {
         sensitivity = v.coerceIn(1, 5)
         prefs?.edit()?.putInt(KEY_SENS, sensitivity)?.apply()
+    }
+
+    fun updateBoardHeaderCollapsed(v: Boolean) {
+        boardHeaderCollapsed = v
+        prefs?.edit()?.putBoolean(KEY_HEADER_COLLAPSED, v)?.apply()
     }
 }
