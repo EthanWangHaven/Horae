@@ -55,18 +55,13 @@ Horae 是一款 Android 原生日程看板应用，以 iOS 液态玻璃（Liquid
 
 ## 界面展示
 
-| 周视图看板 | 折叠顶栏浏览 |
-|:---:|:---:|
-| <img src="docs/screenshots/board-week-view.jpg" width="270" alt="周视图看板"/><br/><sub>七列时间网格，重叠自动分车道，今天列淡高亮</sub> | <img src="docs/screenshots/board-header-collapsed.jpg" width="270" alt="折叠顶栏"/><br/><sub>标题栏收纳至纵轴交点，视野更开阔</sub> |
+| 周视图看板 | 折叠顶栏浏览 | 日程详情 |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/board-week-view.jpg" width="210" alt="周视图看板"/><br/><sub>七列时间网格，重叠自动分车道</sub> | <img src="docs/screenshots/board-header-collapsed.jpg" width="210" alt="折叠顶栏"/><br/><sub>标题栏收纳至纵轴交点，视野更开阔</sub> | <img src="docs/screenshots/schedule-detail-dialog.jpg" width="210" alt="日程详情"/><br/><sub>详情弹窗：时间 / 地点 / 备注 / 提醒</sub> |
 
-| 日程详情 | 添加 / 编辑日程 |
-|:---:|:---:|
-| <img src="docs/screenshots/schedule-detail-dialog.jpg" width="270" alt="日程详情"/><br/><sub>详情弹窗：时间 / 地点 / 备注 / 提醒一目了然</sub> | <img src="docs/screenshots/schedule-edit-screen.jpg" width="270" alt="编辑日程"/><br/><sub>8 色色板、重复规则、提醒与看板条显示设置</sub> |
-
-<p align="center">
-  <img src="docs/screenshots/settings-screen.jpg" width="270" alt="设置页"/><br/>
-  <sub>设置页：看板主题 / 时间轴范围 / 滑动灵敏度 / 界面语言 / 关于</sub>
-</p>
+| 添加 / 编辑日程 | 搜索 | 设置 |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/schedule-edit-screen.jpg" width="210" alt="编辑日程"/><br/><sub>8 色色板、重复规则、提醒设置</sub> | <img src="docs/screenshots/search-screen.jpg" width="210" alt="搜索页"/><br/><sub>按标题 / 地点 / 备注 模糊搜索</sub> | <img src="docs/screenshots/settings-screen.jpg" width="210" alt="设置页"/><br/><sub>主题 / 时间轴 / 灵敏度 / 语言 / 关于</sub> |
 
 ## 技术栈
 
