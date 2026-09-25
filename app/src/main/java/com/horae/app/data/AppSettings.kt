@@ -43,6 +43,9 @@ object AppSettings {
     var languageIndex by mutableIntStateOf(0)
         private set
 
+    /** 看板条溢出显示选择：0 未选择 1 自动适配 2 仍然显示（仅当前会话，不持久化） */
+    var boardOverflowMode by mutableIntStateOf(0)
+
     /** 灵敏度挡位对应的滚动位移/惯性乘数 */
     val sensitivityFactor: Float
         get() = floatArrayOf(0.72f, 0.96f, 1.2f, 1.5f, 1.8f)[(sensitivity - 1).coerceIn(0, 4)]

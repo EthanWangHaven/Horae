@@ -29,8 +29,6 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
@@ -62,6 +60,7 @@ import androidx.core.content.ContextCompat
 import android.Manifest
 import com.horae.app.alarm.ReminderScheduler
 import com.horae.app.data.AppDatabase
+import com.horae.app.data.AppSettings
 import com.horae.app.data.RepeatEnd
 import com.horae.app.data.RepeatFreq
 import com.horae.app.data.RepeatType
@@ -71,6 +70,7 @@ import com.horae.app.ui.common.SettingsRow
 import com.horae.app.ui.common.GlassScreenRoot
 import com.horae.app.ui.common.GlassDialog
 import com.horae.app.ui.common.DialogActions
+import com.horae.app.ui.common.IOSSwitch
 import com.horae.app.ui.common.clickableNoRipple
 import com.horae.app.ui.common.strings
 import com.horae.app.ui.glass.liquidGlass
@@ -175,6 +175,8 @@ fun AddEditScreen(
     // 提醒权限引导（保存带提醒的日程后，若系统权限缺失则弹出）
     var showReminderGuide by remember { mutableStateOf(false) }
     var pendingDone by remember { mutableStateOf(false) }
+    // 看板条显示溢出提示（保存时判断，选择结果记入 AppSettings.boardOverflowMode）
+    var showOverflowSaveDialog by remember { mutableStateOf(false) }
     // 时间段重合提示（与其他日程区间重叠时拦截保存）
     var overlapError by remember { mutableStateOf<String?>(null) }
 
@@ -236,10 +238,19 @@ fun AddEditScreen(
             val id = dao.insert(entity)
             val useId = if (entity.id != 0L) entity.id else id
             ReminderScheduler.schedule(context, useId, entity.startTime, entity.remindMinutes, entity.allDay)
+            // 保存时估算看板条空间：勾选的显示内容放不下则提示（自动适配 / 仍然显示）
+            val dm = context.resources.displayMetrics
+            val hourHeightPx = (dm.widthPixels - 52 * dm.density) / 7f
+            val blockH = ((newEnd - newStart) / 3600000f).coerceAtLeast(0.5f) * hourHeightPx
+            val extraCount = listOf(showStartTime, showEndTime, showLocation && location.isNotBlank()).count { it }
+            val overflow = !allDay && extraCount > 0 && blockH <= 90f + extraCount * 34f
             // 带提醒的日程：保存后检查系统权限，缺失则引导开启（MIUI 等厂商 ROM 尤其需要）
             if (entity.remindMinutes >= 0 && !entity.allDay && reminderGuideItems(context, s).isNotEmpty()) {
                 pendingDone = true
                 showReminderGuide = true
+            } else if (overflow && AppSettings.boardOverflowMode != 2) {
+                pendingDone = true
+                showOverflowSaveDialog = true
             } else {
                 onDone()
             }
@@ -367,13 +378,12 @@ fun AddEditScreen(
                     icon = null,
                     label = s.allDay,
                     trailing = {
-                        Switch(
+                        IOSSwitch(
                             checked = allDay,
                             onCheckedChange = {
                                 allDay = it
                                 timeError = false // f2: 全天无需校验，清除错误
                             },
-                            colors = SwitchDefaults.colors(checkedTrackColor = AccentBlue),
                         )
                     },
                 )
@@ -515,10 +525,9 @@ fun AddEditScreen(
                     icon = null,
                     label = s.showStartTimeLabel,
                     trailing = {
-                        Switch(
+                        IOSSwitch(
                             checked = showStartTime,
                             onCheckedChange = { showStartTime = it },
-                            colors = SwitchDefaults.colors(checkedTrackColor = AccentBlue),
                         )
                     },
                 )
@@ -527,10 +536,9 @@ fun AddEditScreen(
                     icon = null,
                     label = s.showEndTimeLabel,
                     trailing = {
-                        Switch(
+                        IOSSwitch(
                             checked = showEndTime,
                             onCheckedChange = { showEndTime = it },
-                            colors = SwitchDefaults.colors(checkedTrackColor = AccentBlue),
                         )
                     },
                 )
@@ -539,10 +547,9 @@ fun AddEditScreen(
                     icon = null,
                     label = s.locationLabel,
                     trailing = {
-                        Switch(
+                        IOSSwitch(
                             checked = showLocation,
                             onCheckedChange = { showLocation = it },
-                            colors = SwitchDefaults.colors(checkedTrackColor = AccentBlue),
                         )
                     },
                 )
@@ -574,6 +581,67 @@ fun AddEditScreen(
             Spacer(Modifier.height(28.dp))
         }
     }
+    }
+
+    // ---------- 看板条显示溢出提示（保存时） ----------
+    if (showOverflowSaveDialog) {
+        GlassDialog(
+            onDismiss = {
+                showOverflowSaveDialog = false
+                if (pendingDone) {
+                    pendingDone = false
+                    if (AppSettings.boardOverflowMode == 0) AppSettings.boardOverflowMode = 1
+                    onDone()
+                }
+            },
+            compact = true,
+        ) {
+            Text(text = s.overflowTitle, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+            Spacer(Modifier.height(6.dp))
+            Text(text = s.overflowMsg, fontSize = 14.sp, color = SubText, lineHeight = 20.sp)
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = s.autoFit,
+                    color = Ink,
+                    fontSize = 15.sp,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickableNoRipple {
+                            AppSettings.boardOverflowMode = 1
+                            showOverflowSaveDialog = false
+                            if (pendingDone) {
+                                pendingDone = false
+                                onDone()
+                            }
+                        }
+                        .padding(horizontal = 14.dp, vertical = 9.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(AccentBlue)
+                        .clickableNoRipple {
+                            AppSettings.boardOverflowMode = 2
+                            showOverflowSaveDialog = false
+                            if (pendingDone) {
+                                pendingDone = false
+                                onDone()
+                            }
+                        }
+                        .padding(horizontal = 20.dp, vertical = 9.dp),
+                ) {
+                    Text(
+                        text = s.showAnyway,
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
     }
 
     // ---------- 提醒权限引导 ----------

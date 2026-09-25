@@ -1,5 +1,7 @@
 package com.horae.app.ui.common
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -31,9 +34,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -158,6 +163,47 @@ fun Modifier.clickableNoRipple(onClick: () -> Unit): Modifier = composed {
         indication = null,
         onClick = onClick,
     )
+}
+
+/** iOS 风格开关：圆角轨道 + 大白圆点，开启时轨道为主题色（默认蓝色） */
+@Composable
+fun IOSSwitch(
+    checked: Boolean,
+    onCheckedChange: ((Boolean) -> Unit)?,
+    modifier: Modifier = Modifier,
+    checkedTrackColor: Color = AccentBlue,
+    uncheckedTrackColor: Color = Color(0xFFE9E9EA),
+) {
+    val trackWidth = 48.dp
+    val trackHeight = 28.dp
+    val thumbSize = 24.dp
+    val thumbPadding = 2.dp
+    val travel = trackWidth - thumbSize - thumbPadding * 2
+    val progress by animateFloatAsState(
+        targetValue = if (checked) 1f else 0f,
+        animationSpec = tween(durationMillis = 180),
+        label = "iosSwitch",
+    )
+    Box(
+        modifier = modifier
+            .size(trackWidth, trackHeight)
+            .clip(RoundedCornerShape(percent = 50))
+            .background(if (checked) checkedTrackColor else uncheckedTrackColor)
+            .then(
+                if (onCheckedChange != null) {
+                    Modifier.clickableNoRipple { onCheckedChange(!checked) }
+                } else Modifier
+            ),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Box(
+            modifier = Modifier
+                .offset(x = thumbPadding + travel * progress)
+                .size(thumbSize)
+                .shadow(elevation = 2.dp, shape = CircleShape, clip = false)
+                .background(Color.White, CircleShape),
+        )
+    }
 }
 
 /** 主色文字按钮（如「保存」） */

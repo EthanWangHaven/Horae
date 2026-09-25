@@ -62,6 +62,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -75,6 +76,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -156,9 +158,8 @@ fun BoardScreen(
     // 顶部标题栏折叠状态（记住上次状态，持久化到 AppSettings）
     var headerCollapsed by remember { mutableStateOf(AppSettings.boardHeaderCollapsed) }
 
-    // 日程条显示溢出提示（null=未选择 0=自动适配 1=仍然显示；进程内记住，重启后重新询问）
-    var overflowMode by rememberSaveable { mutableStateOf<Int?>(null) }
-    var showOverflowDialog by rememberSaveable { mutableStateOf(false) }
+    // 日程条显示溢出提示（选择状态存于 AppSettings.boardOverflowMode，保存时主动判断）
+    var showOverflowDialog by remember { mutableStateOf(false) }
 
     // 默认竖直滚动位置（7:00 横线贴顶，8:00 字样刚好露出）
     var defaultScrollPx by remember { mutableStateOf(0f) }
@@ -271,9 +272,9 @@ fun BoardScreen(
                                 hourHeight = hourHeight,
                                 startHour = startHour,
                                 endHour = endHour,
-                                overflowShowAll = overflowMode == 1,
+                                overflowShowAll = AppSettings.boardOverflowMode == 2,
                                 onOverflowDetected = {
-                                    if (overflowMode == null && !showOverflowDialog) showOverflowDialog = true
+                                    if (AppSettings.boardOverflowMode == 0 && !showOverflowDialog) showOverflowDialog = true
                                 },
                                 onAddAt = { day, hour ->
                                     val millis = day.atTime(hour, 0)
@@ -359,24 +360,46 @@ fun BoardScreen(
             GlassDialog(
                 onDismiss = {
                     showOverflowDialog = false
-                    if (overflowMode == null) overflowMode = 0
+                    if (AppSettings.boardOverflowMode == 0) AppSettings.boardOverflowMode = 1
                 },
             ) {
                 Text(text = s.overflowTitle, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Ink)
                 Spacer(Modifier.height(10.dp))
                 Text(text = s.overflowMsg, fontSize = 14.sp, color = SubText, lineHeight = 20.sp)
                 Spacer(Modifier.height(14.dp))
-                DialogActions(
-                    onCancel = {
-                        showOverflowDialog = false
-                        overflowMode = 0
-                    },
-                    confirmText = s.showAnyway,
-                    onConfirm = {
-                        showOverflowDialog = false
-                        overflowMode = 1
-                    },
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        text = s.autoFit,
+                        color = Ink,
+                        fontSize = 15.sp,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickableNoRipple {
+                                AppSettings.boardOverflowMode = 1
+                                showOverflowDialog = false
+                            }
+                            .padding(horizontal = 14.dp, vertical = 9.dp),
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(AccentBlue)
+                            .clickableNoRipple {
+                                AppSettings.boardOverflowMode = 2
+                                showOverflowDialog = false
+                            }
+                            .padding(horizontal = 20.dp, vertical = 9.dp),
+                    ) {
+                        Text(
+                            text = s.showAnyway,
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
             }
         }
 
@@ -773,6 +796,10 @@ private fun ScheduleBlock(
         // 空间不足：提醒用户（每次会话仅提示一次，由调用方去重）
         SideEffect { onOverflowDetected() }
     }
+    // 附加行（时间/地点）被 … 截断时触发溢出提示（标题截断属正常，不触发）
+    val extrasOverflowLayout: (TextLayoutResult) -> Unit = { layout ->
+        if (layout.hasVisualOverflow) onOverflowDetected()
+    }
     Box(
         modifier = Modifier
             .offset { IntOffset(x.roundToInt(), y.roundToInt()) }
@@ -807,6 +834,7 @@ private fun ScheduleBlock(
                     color = Color.White.copy(alpha = 0.85f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    onTextLayout = extrasOverflowLayout,
                     modifier = Modifier.padding(top = 2.dp),
                 )
             }
@@ -819,6 +847,7 @@ private fun ScheduleBlock(
                     color = Color.White.copy(alpha = 0.85f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    onTextLayout = extrasOverflowLayout,
                     modifier = Modifier.padding(top = if (renderStart) 1.dp else 2.dp),
                 )
             }
@@ -830,6 +859,7 @@ private fun ScheduleBlock(
                     color = Color.White.copy(alpha = 0.85f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    onTextLayout = extrasOverflowLayout,
                     modifier = Modifier.padding(top = 1.dp),
                 )
             }
