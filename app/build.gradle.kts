@@ -10,7 +10,7 @@ plugins {
 // ===== 版本号自增 =====
 // version.properties 保存当前版本；执行编译类任务（assemble/bundle/install/build）时末位 +1，
 // 末位满 100 向中间位进 1（如 1.0.99 -> 1.1.0），中间位满 100 同理进到首位。
-// APK 输出名：Horae-<版本号>-app-<debug|release>.apk，如 Horae-1.0.2-app-debug.apk
+// APK 输出名：release 为 Horae-<版本号>.apk，debug 为 Horae-<版本号>-debug.apk
 val versionPropsFile = rootProject.file("version.properties")
 val versionProps = Properties()
 if (versionPropsFile.exists()) {
@@ -39,6 +39,12 @@ if (isCompiling) {
     versionPropsFile.outputStream().use { versionProps.store(it, "Horae build version") }
 }
 
+// ===== 签名配置（keystore.properties 保存密钥信息，不入库） =====
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
+}
+
 android {
     namespace = "com.horae.app"
     compileSdk = 36
@@ -51,10 +57,22 @@ android {
         versionName = "$vMajor.$vMinor.$vPatch"
     }
 
+    signingConfigs {
+        if (keystorePropsFile.exists()) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = if (keystorePropsFile.exists()) signingConfigs.getByName("release") else null
         }
     }
 
@@ -71,9 +89,10 @@ android {
                 as org.gradle.api.DomainObjectCollection<com.android.build.gradle.api.BaseVariantOutput>
             outputs.all(object : org.gradle.api.Action<com.android.build.gradle.api.BaseVariantOutput> {
                 override fun execute(output: com.android.build.gradle.api.BaseVariantOutput) {
+                    val suffix = if (variant.name == "release") "" else "-${variant.name}"
                     (output as com.android.build.gradle.internal.api.BaseVariantOutputImpl)
                         .outputFileName =
-                        "Horae-$vMajor.$vMinor.$vPatch-app-${variant.name}.apk"
+                        "Horae-$vMajor.$vMinor.$vPatch$suffix.apk"
                 }
             })
         }

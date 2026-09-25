@@ -17,6 +17,21 @@ Horae 是一款 Android 原生日程看板应用，采用 iOS 液态玻璃（Liq
 - **滑动灵敏度**：5 挡竖滑灵敏度调节
 - **液态玻璃 UI**：壁纸实时模糊 + 高光描边，全应用统一质感
 
+## 界面展示
+
+| 周视图看板 | 折叠顶栏浏览 |
+|:---:|:---:|
+| <img src="docs/screenshots/board-week-view.jpg" width="260"/> | <img src="docs/screenshots/board-header-collapsed.jpg" width="260"/> |
+
+| 日程详情弹窗 | 添加 / 编辑日程 |
+|:---:|:---:|
+| <img src="docs/screenshots/schedule-detail-dialog.jpg" width="260"/> | <img src="docs/screenshots/schedule-edit-screen.jpg" width="260"/> |
+
+<p align="center">
+  <img src="docs/screenshots/settings-screen.jpg" width="260" alt="设置页"/><br/>
+  <sub>设置页：看板主题 / 时间轴范围 / 滑动灵敏度 / 语言 / 关于</sub>
+</p>
+
 ## 技术栈
 
 - Kotlin + Jetpack Compose（Material 3）

@@ -18,9 +18,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -63,25 +60,41 @@ fun SettingsScreen(onBack: () -> Unit) {
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            // ---------- 顶部：返回 + 标题（胶囊条宽度包裹内容） ----------
+            // ---------- 顶部：返回 + 标题（与添加/编辑日程页同款布局，标题居中） ----------
             Row(
                 modifier = Modifier
-                    .padding(top = 8.dp)
-                    .liquidGlass(shape = RoundedCornerShape(24.dp), tintAlpha = 0.6f, blurRadius = 20.dp)
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                    .padding(vertical = 10.dp)
+                    .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = s.back,
-                    tint = AccentBlue,
-                    modifier = Modifier.clickableNoRipple(onBack),
+                Text(
+                    text = s.back,
+                    color = AccentBlue,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .clickableNoRipple(onBack)
+                        .padding(8.dp),
                 )
-                Spacer(Modifier.width(14.dp))
-                Text(text = s.settings, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Ink)
+                Text(
+                    text = s.settings,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Ink,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.weight(1f),
+                )
+                // 右侧透明占位（与"返回"等宽），保证标题绝对居中
+                Text(
+                    text = s.back,
+                    color = Color.Transparent,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(8.dp),
+                )
             }
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(4.dp))
 
             // ---------- 看板主题 ----------
             SettingsCard(title = s.boardTheme) {
@@ -234,9 +247,9 @@ fun SettingsScreen(onBack: () -> Unit) {
 
     // ---------- 语言选择弹窗（与其他弹窗统一玻璃风格） ----------
     if (langPickerOpen) {
-        GlassDialog(onDismiss = { langPickerOpen = false }) {
+        GlassDialog(onDismiss = { langPickerOpen = false }, compact = true) {
             Text(text = s.language, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Ink)
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(6.dp))
             listOf(0 to "中文", 1 to "English").forEach { (idx, label) ->
                 val selected = AppSettings.languageIndex == idx
                 Text(
@@ -249,10 +262,9 @@ fun SettingsScreen(onBack: () -> Unit) {
                             AppSettings.updateLanguageIndex(idx)
                             langPickerOpen = false
                         }
-                        .padding(vertical = 11.dp),
+                        .padding(vertical = 8.dp),
                 )
             }
-            Spacer(Modifier.height(6.dp))
             DialogActions(onCancel = { langPickerOpen = false })
         }
     }
