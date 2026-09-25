@@ -17,6 +17,7 @@ object AppSettings {
     private const val KEY_END = "axis_end_hour"
     private const val KEY_SENS = "scroll_sensitivity"
     private const val KEY_HEADER_COLLAPSED = "board_header_collapsed"
+    private const val KEY_LANG = "language_index"
 
     /** 看板背景主题序号（0 起，上界由 Wall.BoardThemes 决定） */
     var themeIndex by mutableIntStateOf(0)
@@ -38,6 +39,10 @@ object AppSettings {
     var boardHeaderCollapsed by mutableStateOf(false)
         private set
 
+    /** 界面语言：0 中文，1 English */
+    var languageIndex by mutableIntStateOf(0)
+        private set
+
     /** 灵敏度挡位对应的滚动位移/惯性乘数 */
     val sensitivityFactor: Float
         get() = floatArrayOf(0.72f, 0.96f, 1.2f, 1.5f, 1.8f)[(sensitivity - 1).coerceIn(0, 4)]
@@ -51,6 +56,7 @@ object AppSettings {
             axisEndHour = it.getInt(KEY_END, 23)
             sensitivity = it.getInt(KEY_SENS, 4)
             boardHeaderCollapsed = it.getBoolean(KEY_HEADER_COLLAPSED, false)
+            languageIndex = it.getInt(KEY_LANG, 0)
         }
     }
 
@@ -76,5 +82,15 @@ object AppSettings {
     fun updateBoardHeaderCollapsed(v: Boolean) {
         boardHeaderCollapsed = v
         prefs?.edit()?.putBoolean(KEY_HEADER_COLLAPSED, v)?.apply()
+    }
+
+    fun updateLanguageIndex(v: Int) {
+        languageIndex = v.coerceIn(0, 1)
+        prefs?.edit()?.putInt(KEY_LANG, languageIndex)?.apply()
+    }
+
+    /** 非组合环境（如广播接收器）使用：未加载时先加载 */
+    fun ensureLoaded(context: Context) {
+        if (prefs == null) load(context)
     }
 }

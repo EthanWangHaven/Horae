@@ -7,7 +7,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,7 +25,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DatePickerDialog
@@ -34,7 +32,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,8 +44,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -74,7 +69,10 @@ import com.horae.app.data.ScheduleEntity
 import com.horae.app.logic.ScheduleLogic
 import com.horae.app.ui.common.SettingsRow
 import com.horae.app.ui.common.GlassScreenRoot
+import com.horae.app.ui.common.GlassDialog
+import com.horae.app.ui.common.DialogActions
 import com.horae.app.ui.common.clickableNoRipple
+import com.horae.app.ui.common.strings
 import com.horae.app.ui.glass.liquidGlass
 import com.horae.app.ui.theme.AccentBlue
 import com.horae.app.ui.theme.Hairline
@@ -101,6 +99,8 @@ fun AddEditScreen(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
+    val s = strings()
+    val lang = com.horae.app.data.AppSettings.languageIndex
     val dao = AppDatabase.get(context).scheduleDao()
 
     // ---------- 表单状态 ----------
@@ -133,6 +133,10 @@ fun AddEditScreen(
     var repeatCount by remember { mutableIntStateOf(10) }
     var remindMinutes by remember { mutableStateOf(-1) }
     var colorIndex by remember { mutableStateOf(0) }
+    // 看板条显示开关
+    var showStartTime by remember { mutableStateOf(true) }
+    var showEndTime by remember { mutableStateOf(false) }
+    var showLocation by remember { mutableStateOf(false) }
 
     LaunchedEffect(scheduleId) {
         if (scheduleId != null) {
@@ -155,6 +159,9 @@ fun AddEditScreen(
                 repeatCount = s.repeatCount
                 remindMinutes = s.remindMinutes
                 colorIndex = s.colorIndex
+                showStartTime = s.showStartTime
+                showEndTime = s.showEndTime
+                showLocation = s.showLocation
             }
             initDone = true
         }
@@ -200,8 +207,9 @@ fun AddEditScreen(
                         ScheduleLogic.toMillis(it.end) > newStart
                 }
             if (conflict != null) {
-                overlapError = "与「" + conflict.schedule.title.ifBlank { "日程" } + "」时间段重合" +
-                    "（" + ScheduleLogic.hm(conflict.start) + "–" + ScheduleLogic.hm(conflict.end) + "），请调整时间"
+                overlapError = s.overlapBefore + conflict.schedule.title.ifBlank { s.scheduleFallback } +
+                    s.overlapMid + ScheduleLogic.hm(conflict.start) + "–" + ScheduleLogic.hm(conflict.end) +
+                    s.overlapAfter
                 return@launch
             }
             val entity = ScheduleEntity(
@@ -221,12 +229,15 @@ fun AddEditScreen(
                 remindMinutes = remindMinutes,
                 note = note.trim().takeIf { it.isNotEmpty() },
                 colorIndex = colorIndex,
+                showStartTime = showStartTime,
+                showEndTime = showEndTime,
+                showLocation = showLocation,
             )
             val id = dao.insert(entity)
             val useId = if (entity.id != 0L) entity.id else id
             ReminderScheduler.schedule(context, useId, entity.startTime, entity.remindMinutes, entity.allDay)
             // 带提醒的日程：保存后检查系统权限，缺失则引导开启（MIUI 等厂商 ROM 尤其需要）
-            if (entity.remindMinutes >= 0 && !entity.allDay && reminderGuideItems(context).isNotEmpty()) {
+            if (entity.remindMinutes >= 0 && !entity.allDay && reminderGuideItems(context, s).isNotEmpty()) {
                 pendingDone = true
                 showReminderGuide = true
             } else {
@@ -242,7 +253,7 @@ fun AddEditScreen(
                 .fillMaxSize()
                 .statusBarsPadding(),
             contentAlignment = Alignment.Center,
-        ) { Text(text = "加载中…", color = SubText) }
+        ) { Text(text = s.loading, color = SubText) }
         return
     }
 
@@ -261,7 +272,7 @@ fun AddEditScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "取消",
+                text = s.cancel,
                 color = AccentBlue,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -270,7 +281,7 @@ fun AddEditScreen(
                     .padding(8.dp),
             )
             Text(
-                text = if (loaded != null) "编辑日程" else "添加日程",
+                text = if (loaded != null) s.editSchedule else s.addSchedule,
                 fontSize = 17.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Ink,
@@ -278,7 +289,7 @@ fun AddEditScreen(
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
             Text(
-                text = "保存",
+                text = s.save,
                 color = AccentBlue,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -310,7 +321,7 @@ fun AddEditScreen(
                 decorationBox = { inner ->
                     Box {
                         if (title.isEmpty()) {
-                            Text("标题", fontSize = 24.sp, fontWeight = FontWeight.SemiBold, color = SubText.copy(alpha = 0.6f))
+                            Text(s.titlePlaceholder, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, color = SubText.copy(alpha = 0.6f))
                         }
                         inner()
                     }
@@ -319,7 +330,7 @@ fun AddEditScreen(
             // 标题必填错误提示
             if (titleError) {
                 Text(
-                    text = "请填写标题",
+                    text = s.titleRequired,
                     color = Color(0xFFFF3B30),
                     fontSize = 13.sp,
                     modifier = Modifier.padding(top = 2.dp, start = 4.dp),
@@ -338,7 +349,7 @@ fun AddEditScreen(
                 decorationBox = { inner ->
                     Box {
                         if (location.isEmpty()) {
-                            Text("位置", fontSize = 16.sp, color = SubText.copy(alpha = 0.6f))
+                            Text(s.locationPlaceholder, fontSize = 16.sp, color = SubText.copy(alpha = 0.6f))
                         }
                         inner()
                     }
@@ -354,7 +365,7 @@ fun AddEditScreen(
             ) {
                 SettingsRow(
                     icon = null,
-                    label = "全天",
+                    label = s.allDay,
                     trailing = {
                         Switch(
                             checked = allDay,
@@ -369,37 +380,37 @@ fun AddEditScreen(
                 FieldDivider()
                 SettingsRow(
                     icon = null,
-                    label = "开始",
-                    value = if (allDay) ScheduleLogic.listTitle(startDate)
-                    else "${ScheduleLogic.listTitle(startDate)} ${ScheduleLogic.hm(startTime)}",
+                    label = s.start,
+                    value = if (allDay) ScheduleLogic.listTitle(startDate, lang)
+                    else "${ScheduleLogic.listTitle(startDate, lang)} ${ScheduleLogic.hm(startTime)}",
                     onClick = { picker = Picker.StartDate },
                 )
                 FieldDivider()
                 SettingsRow(
                     icon = null,
-                    label = "结束",
-                    value = if (allDay) ScheduleLogic.listTitle(endDate)
-                    else "${ScheduleLogic.listTitle(endDate)} ${ScheduleLogic.hm(endTime)}",
+                    label = s.end,
+                    value = if (allDay) ScheduleLogic.listTitle(endDate, lang)
+                    else "${ScheduleLogic.listTitle(endDate, lang)} ${ScheduleLogic.hm(endTime)}",
                     onClick = { picker = Picker.EndDate },
                 )
                 FieldDivider()
                 SettingsRow(
                     icon = null,
-                    label = "重复",
+                    label = s.repeat,
                     value = if (repeatType == RepeatType.CUSTOM)
-                        ScheduleLogic.customRepeatLabel(repeatFreq, repeatInterval)
-                    else ScheduleLogic.repeatLabel(repeatType),
+                        ScheduleLogic.customRepeatLabel(repeatFreq, repeatInterval, lang)
+                    else ScheduleLogic.repeatLabel(repeatType, lang),
                     onClick = { picker = Picker.Repeat },
                 )
                 if (repeatType != RepeatType.NONE) {
                     FieldDivider()
                     SettingsRow(
                         icon = null,
-                        label = "结束重复",
+                        label = s.repeatEnd,
                         value = when (repeatEndType) {
-                            RepeatEnd.UNTIL -> ScheduleLogic.listTitle(repeatEndDate)
-                            RepeatEnd.COUNT -> "$repeatCount 次"
-                            else -> "永不"
+                            RepeatEnd.UNTIL -> ScheduleLogic.listTitle(repeatEndDate, lang)
+                            RepeatEnd.COUNT -> s.timesFmt(repeatCount)
+                            else -> s.never
                         },
                         onClick = { picker = Picker.RepeatEnd },
                     )
@@ -407,8 +418,8 @@ fun AddEditScreen(
                 FieldDivider()
                 SettingsRow(
                     icon = null,
-                    label = "提醒",
-                    value = ScheduleLogic.remindLabel(remindMinutes),
+                    label = s.remind,
+                    value = ScheduleLogic.remindLabel(remindMinutes, lang),
                     onClick = { picker = Picker.Remind },
                 )
             }
@@ -416,7 +427,7 @@ fun AddEditScreen(
             // f2: 时间校验错误提示
             if (timeError) {
                 Text(
-                    text = "结束时间必须晚于开始时间",
+                    text = s.endAfterStart,
                     color = Color(0xFFFF3B30),
                     fontSize = 13.sp,
                     modifier = Modifier.padding(top = 8.dp, start = 4.dp),
@@ -447,7 +458,7 @@ fun AddEditScreen(
                 decorationBox = { inner ->
                     Box(modifier = Modifier.height(64.dp)) {
                         if (note.isEmpty()) {
-                            Text("备注", fontSize = 15.sp, color = SubText.copy(alpha = 0.6f))
+                            Text(s.notePlaceholder, fontSize = 15.sp, color = SubText.copy(alpha = 0.6f))
                         }
                         inner()
                     }
@@ -462,7 +473,7 @@ fun AddEditScreen(
                     .liquidGlass(shape = RoundedCornerShape(20.dp), tintAlpha = 0.62f, blurRadius = 20.dp)
                     .padding(horizontal = 16.dp, vertical = 14.dp),
             ) {
-                Text(text = "颜色", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                Text(text = s.color, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     ScheduleColors.forEachIndexed { idx, c ->
@@ -485,6 +496,58 @@ fun AddEditScreen(
                 }
             }
 
+            // ---------- 看板显示 ----------
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp)
+                    .liquidGlass(shape = RoundedCornerShape(20.dp), tintAlpha = 0.62f, blurRadius = 20.dp)
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+            ) {
+                SettingsRow(
+                    icon = null,
+                    label = s.boardDisplay,
+                    value = null,
+                    valuePlaceholder = null,
+                )
+                FieldDivider()
+                SettingsRow(
+                    icon = null,
+                    label = s.showStartTimeLabel,
+                    trailing = {
+                        Switch(
+                            checked = showStartTime,
+                            onCheckedChange = { showStartTime = it },
+                            colors = SwitchDefaults.colors(checkedTrackColor = AccentBlue),
+                        )
+                    },
+                )
+                FieldDivider()
+                SettingsRow(
+                    icon = null,
+                    label = s.showEndTimeLabel,
+                    trailing = {
+                        Switch(
+                            checked = showEndTime,
+                            onCheckedChange = { showEndTime = it },
+                            colors = SwitchDefaults.colors(checkedTrackColor = AccentBlue),
+                        )
+                    },
+                )
+                FieldDivider()
+                SettingsRow(
+                    icon = null,
+                    label = s.locationLabel,
+                    trailing = {
+                        Switch(
+                            checked = showLocation,
+                            onCheckedChange = { showLocation = it },
+                            colors = SwitchDefaults.colors(checkedTrackColor = AccentBlue),
+                        )
+                    },
+                )
+            }
+
             // ---------- 删除（编辑模式） ----------
             if (loaded != null) {
                 Row(
@@ -504,7 +567,7 @@ fun AddEditScreen(
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(Modifier.width(6.dp))
-                    Text(text = "删除日程", color = Color(0xFFFF3B30), fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Text(text = s.deleteSchedule, color = Color(0xFFFF3B30), fontSize = 15.sp, fontWeight = FontWeight.Medium)
                 }
             }
 
@@ -516,9 +579,9 @@ fun AddEditScreen(
     // ---------- 提醒权限引导 ----------
     if (showReminderGuide) {
         val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
-        val items = reminderGuideItems(context)
+        val items = reminderGuideItems(context, s)
         GlassDialog(onDismiss = { showReminderGuide = false; if (pendingDone) onDone() }) {
-            Text(text = "开启提醒所需权限", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+            Text(text = s.permTitle, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Ink)
             Spacer(Modifier.height(10.dp))
             items.forEach { item ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -551,13 +614,13 @@ fun AddEditScreen(
                             }
                             .padding(horizontal = 14.dp, vertical = 7.dp),
                     ) {
-                        Text(text = "去开启", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(text = s.goEnable, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
                 Spacer(Modifier.height(12.dp))
             }
             Text(
-                text = "两项都开启后，提醒即可准点显示在通知栏",
+                text = s.permFooter,
                 fontSize = 12.sp,
                 color = SubText,
                 lineHeight = 17.sp,
@@ -565,7 +628,7 @@ fun AddEditScreen(
             Spacer(Modifier.height(12.dp))
             DialogActions(
                 onCancel = { showReminderGuide = false; if (pendingDone) onDone() },
-                confirmText = "完成",
+                confirmText = s.done,
                 onConfirm = { showReminderGuide = false; if (pendingDone) onDone() },
             )
         }
@@ -575,6 +638,8 @@ fun AddEditScreen(
     when (picker) {
         Picker.StartDate -> DateDialog(
             initial = startDate,
+            lang = lang,
+            s = s,
             onConfirm = { d ->
                 overlapError = null
                 startDate = d
@@ -585,6 +650,8 @@ fun AddEditScreen(
         )
         Picker.StartTime -> TimeDialog(
             initial = startTime,
+            lang = lang,
+            s = s,
             onConfirm = { t ->
                 overlapError = null
                 startTime = t
@@ -596,6 +663,8 @@ fun AddEditScreen(
         )
         Picker.EndDate -> DateDialog(
             initial = endDate,
+            lang = lang,
+            s = s,
             onConfirm = { d ->
                 overlapError = null
                 endDate = d
@@ -605,6 +674,8 @@ fun AddEditScreen(
         )
         Picker.EndTime -> TimeDialog(
             initial = endTime,
+            lang = lang,
+            s = s,
             onConfirm = { t ->
                 overlapError = null
                 endTime = t
@@ -615,8 +686,8 @@ fun AddEditScreen(
             onDismiss = { picker = null },
         )
         Picker.Repeat -> OptionsDialog(
-            title = "重复",
-            options = ScheduleLogic.repeatOptions.map { ScheduleLogic.repeatLabel(it) },
+            title = s.repeat,
+            options = ScheduleLogic.repeatOptions.map { ScheduleLogic.repeatLabel(it, lang) },
             selectedIndex = ScheduleLogic.repeatOptions.indexOf(repeatType),
             onSelect = { idx ->
                 val t = ScheduleLogic.repeatOptions[idx]
@@ -627,6 +698,8 @@ fun AddEditScreen(
         Picker.CustomRepeat -> CustomRepeatDialog(
             initFreq = repeatFreq,
             initInterval = repeatInterval,
+            lang = lang,
+            s = s,
             onConfirm = { f, n ->
                 repeatFreq = f
                 repeatInterval = n
@@ -636,8 +709,8 @@ fun AddEditScreen(
             onDismiss = { picker = null },
         )
         Picker.RepeatEnd -> OptionsDialog(
-            title = "结束重复",
-            options = listOf("永不", "时间", "次数"),
+            title = s.repeatEnd,
+            options = listOf(s.never, s.untilDate, s.untilCount),
             selectedIndex = when (repeatEndType) {
                 RepeatEnd.UNTIL -> 1
                 RepeatEnd.COUNT -> 2
@@ -654,6 +727,8 @@ fun AddEditScreen(
         )
         Picker.RepeatEndDate -> DateDialog(
             initial = repeatEndDate,
+            lang = lang,
+            s = s,
             onConfirm = { d ->
                 repeatEndDate = d
                 // 结束日期不能早于开始日期
@@ -664,37 +739,42 @@ fun AddEditScreen(
         )
         Picker.RepeatCount -> CountDialog(
             init = repeatCount,
+            s = s,
             onConfirm = { repeatCount = it; picker = null },
             onDismiss = { picker = null },
         )
         Picker.Remind -> OptionsDialog(
-            title = "提醒",
-            options = ScheduleLogic.remindOptions.map { ScheduleLogic.remindLabel(it) },
+            title = s.remind,
+            options = ScheduleLogic.remindOptions.map { ScheduleLogic.remindLabel(it, lang) },
             selectedIndex = ScheduleLogic.remindOptions.indexOf(remindMinutes),
             onSelect = { idx -> remindMinutes = ScheduleLogic.remindOptions[idx]; picker = null },
             onDismiss = { picker = null },
         )
-        Picker.Delete -> AlertDialog(
-            onDismissRequest = { picker = null },
-            title = { Text("删除日程？") },
-            text = { Text("该日程及其提醒将被移除。") },
-            confirmButton = {
-                TextButton(onClick = {
-                    val s = loaded
-                    if (s != null) {
+        Picker.Delete -> GlassDialog(
+            onDismiss = { picker = null },
+            compact = true,
+        ) {
+            Text(text = s.deleteTitle, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+            Spacer(Modifier.height(6.dp))
+            Text(text = s.deleteMessage, fontSize = 14.sp, color = SubText, lineHeight = 20.sp)
+            Spacer(Modifier.height(10.dp))
+            DialogActions(
+                onCancel = { picker = null },
+                confirmText = s.delete,
+                onConfirm = {
+                    val sc = loaded
+                    if (sc != null) {
                         scope.launch {
-                            dao.delete(s)
-                            ReminderScheduler.cancel(context, s.id)
+                            dao.delete(sc)
+                            ReminderScheduler.cancel(context, sc.id)
                             onDone()
                         }
                     }
                     picker = null
-                }) { Text("删除", color = Color(0xFFFF3B30), fontWeight = FontWeight.SemiBold) }
-            },
-            dismissButton = {
-                TextButton(onClick = { picker = null }) { Text("取消", color = Ink) }
-            },
-        )
+                },
+                confirmColor = Color(0xFFFF3B30),
+            )
+        }
         null -> Unit
     }
 }
@@ -712,6 +792,8 @@ private fun FieldDivider() {
 @Composable
 private fun DateDialog(
     initial: LocalDate,
+    lang: Int,
+    s: com.horae.app.ui.common.AppStrings,
     onConfirm: (LocalDate) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -722,7 +804,7 @@ private fun DateDialog(
         // 月份切换
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "${viewMonth.year}年${viewMonth.monthValue}月",
+                text = s.monthTitle(viewMonth),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Ink,
@@ -735,7 +817,7 @@ private fun DateDialog(
         Spacer(Modifier.height(10.dp))
         // 星期表头（周一起始）
         Row {
-            listOf("一", "二", "三", "四", "五", "六", "日").forEach { wd ->
+            ScheduleLogic.weekdayLetters(lang).forEach { wd ->
                 Text(
                     text = wd,
                     fontSize = 12.sp,
@@ -778,7 +860,7 @@ private fun DateDialog(
             }
         }
         Spacer(Modifier.height(14.dp))
-        DialogActions(onCancel = onDismiss, confirmText = "下一步", onConfirm = { onConfirm(selected) })
+        DialogActions(onCancel = onDismiss, confirmText = s.nextStep, onConfirm = { onConfirm(selected) })
     }
 }
 
@@ -801,6 +883,8 @@ private fun MonthArrow(text: String, onClick: () -> Unit) {
 @Composable
 private fun TimeDialog(
     initial: LocalTime,
+    lang: Int,
+    s: com.horae.app.ui.common.AppStrings,
     onConfirm: (LocalTime) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -816,7 +900,7 @@ private fun TimeDialog(
                     modifier = Modifier.padding(bottom = 14.dp),
                 )
                 Text(
-                    text = "小时",
+                    text = s.hour,
                     fontSize = 12.sp,
                     color = SubText,
                     modifier = Modifier.fillMaxWidth().padding(start = 2.dp, bottom = 6.dp),
@@ -830,7 +914,7 @@ private fun TimeDialog(
                     Spacer(Modifier.height(4.dp))
                 }
                 Text(
-                    text = "分钟",
+                    text = s.minute,
                     fontSize = 12.sp,
                     color = SubText,
                     modifier = Modifier.fillMaxWidth().padding(start = 2.dp, top = 8.dp, bottom = 6.dp),
@@ -845,7 +929,7 @@ private fun TimeDialog(
                 }
             }
         Spacer(Modifier.height(12.dp))
-        DialogActions(onCancel = onDismiss, confirmText = "确定", onConfirm = { onConfirm(LocalTime.of(hour, minute)) })
+        DialogActions(onCancel = onDismiss, confirmText = s.confirm, onConfirm = { onConfirm(LocalTime.of(hour, minute)) })
     }
 }
 
@@ -868,74 +952,6 @@ private fun TimeCell(text: String, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** 通用玻璃弹窗容器：与看板日程详情弹窗同款样式（90% 宽 + 80% 白半透明 + 22dp 圆角） */
-@Composable
-private fun GlassDialog(
-    onDismiss: () -> Unit,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickableNoRipple(onDismiss),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(horizontal = 32.dp)
-                    .fillMaxWidth(0.9f)
-                    .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(22.dp))
-                    .clickableNoRipple { } // 吞掉面板内点击
-                    .padding(horizontal = 20.dp, vertical = 18.dp),
-            ) {
-                content()
-            }
-        }
-    }
-}
-
-/** 弹窗底部操作行：取消 + 可选确认按钮 */
-@Composable
-private fun DialogActions(
-    onCancel: () -> Unit,
-    confirmText: String? = null,
-    onConfirm: () -> Unit = {},
-) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Spacer(Modifier.weight(1f))
-        Text(
-            text = "取消",
-            color = Ink,
-            fontSize = 15.sp,
-            modifier = Modifier
-                .clip(RoundedCornerShape(10.dp))
-                .clickableNoRipple(onCancel)
-                .padding(horizontal = 14.dp, vertical = 9.dp),
-        )
-        if (confirmText != null) {
-            Spacer(Modifier.width(10.dp))
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(AccentBlue)
-                    .clickableNoRipple(onConfirm)
-                    .padding(horizontal = 20.dp, vertical = 9.dp),
-            ) {
-                Text(
-                    text = confirmText,
-                    color = Color.White,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-        }
-    }
-}
-
 @Composable
 private fun OptionsDialog(
     title: String,
@@ -944,9 +960,9 @@ private fun OptionsDialog(
     onSelect: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    GlassDialog(onDismiss = onDismiss) {
+    GlassDialog(onDismiss = onDismiss, compact = true) {
         Text(text = title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Ink)
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(6.dp))
         options.forEachIndexed { idx, label ->
             Text(
                 text = if (idx == selectedIndex) "✓ $label" else label,
@@ -956,10 +972,9 @@ private fun OptionsDialog(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
                     .clickableNoRipple { onSelect(idx) }
-                    .padding(vertical = 11.dp),
+                    .padding(vertical = 8.dp),
             )
         }
-        Spacer(Modifier.height(6.dp))
         DialogActions(onCancel = onDismiss)
     }
 }
@@ -969,23 +984,25 @@ private fun OptionsDialog(
 private fun CustomRepeatDialog(
     initFreq: Int,
     initInterval: Int,
+    lang: Int,
+    s: com.horae.app.ui.common.AppStrings,
     onConfirm: (Int, Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var freq by remember { mutableStateOf(initFreq) }
     var interval by remember { mutableIntStateOf(initInterval) }
     GlassDialog(onDismiss = onDismiss) {
-        Text(text = "自定义重复", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+        Text(text = s.customRepeat, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Ink)
         Spacer(Modifier.height(12.dp))
-        Text(text = "频率", fontSize = 13.sp, color = SubText)
+        Text(text = s.freqLabel, fontSize = 13.sp, color = SubText)
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(
-                RepeatFreq.DAY to "天",
-                RepeatFreq.WEEK to "周",
-                RepeatFreq.MONTH to "月",
-                RepeatFreq.YEAR to "年",
-            ).forEach { (f, label) ->
+                RepeatFreq.DAY,
+                RepeatFreq.WEEK,
+                RepeatFreq.MONTH,
+                RepeatFreq.YEAR,
+            ).forEach { f ->
                 val sel = freq == f
                 Box(
                     modifier = Modifier
@@ -997,7 +1014,7 @@ private fun CustomRepeatDialog(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = label,
+                        text = ScheduleLogic.freqUnit(f, lang),
                         color = if (sel) Color.White else Ink,
                         fontSize = 14.sp,
                         fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal,
@@ -1007,21 +1024,21 @@ private fun CustomRepeatDialog(
         }
         Spacer(Modifier.height(16.dp))
         StepperRow(
-            label = "间隔",
+            label = s.interval,
             value = interval,
             onMinus = { if (interval > 1) interval-- },
             onPlus = { if (interval < 99) interval++ },
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "重复周期：" + ScheduleLogic.customRepeatLabel(freq, interval.coerceIn(1, 99)),
+            text = s.cyclePrefix + ScheduleLogic.customRepeatLabel(freq, interval.coerceIn(1, 99), lang),
             fontSize = 12.sp,
             color = SubText,
         )
         Spacer(Modifier.height(12.dp))
         DialogActions(
             onCancel = onDismiss,
-            confirmText = "确定",
+            confirmText = s.confirm,
             onConfirm = { onConfirm(freq, interval.coerceIn(1, 99)) },
         )
     }
@@ -1031,15 +1048,16 @@ private fun CustomRepeatDialog(
 @Composable
 private fun CountDialog(
     init: Int,
+    s: com.horae.app.ui.common.AppStrings,
     onConfirm: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var count by remember { mutableIntStateOf(init) }
     GlassDialog(onDismiss = onDismiss) {
-        Text(text = "重复次数", fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+        Text(text = s.repeatCountTitle, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Ink)
         Spacer(Modifier.height(14.dp))
         StepperRow(
-            label = "次数",
+            label = s.countLabel,
             value = count,
             onMinus = { if (count > 1) count-- },
             onPlus = { if (count < 99) count++ },
@@ -1047,7 +1065,7 @@ private fun CountDialog(
         Spacer(Modifier.height(14.dp))
         DialogActions(
             onCancel = onDismiss,
-            confirmText = "确定",
+            confirmText = s.confirm,
             onConfirm = { onConfirm(count.coerceIn(1, 99)) },
         )
     }
@@ -1104,14 +1122,17 @@ private data class ReminderGuideItem(val title: String, val desc: String, val ty
  * - 通知权限缺失 → 引导授权
  * - 小米/红米（MIUI/HyperOS）→ 始终引导开启自启动（系统无 API 检测，需用户确认）
  */
-private fun reminderGuideItems(context: android.content.Context): List<ReminderGuideItem> {
+private fun reminderGuideItems(
+    context: android.content.Context,
+    s: com.horae.app.ui.common.AppStrings,
+): List<ReminderGuideItem> {
     val manufacturer = android.os.Build.MANUFACTURER
     return buildList {
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(
                 context, Manifest.permission.POST_NOTIFICATIONS
             ) != PackageManager.PERMISSION_GRANTED
-        ) add(ReminderGuideItem("通知权限", "允许 Horae 弹出提醒通知", ReminderGuideType.NOTIFICATION))
+        ) add(ReminderGuideItem(s.permNotifTitle, s.permNotifDesc, ReminderGuideType.NOTIFICATION))
         if (manufacturer.equals("xiaomi", true) || manufacturer.equals("redmi", true))
-            add(ReminderGuideItem("自启动", "允许 Horae 后台启动，否则到点无法提醒", ReminderGuideType.AUTOSTART))
+            add(ReminderGuideItem(s.permAutoTitle, s.permAutoDesc, ReminderGuideType.AUTOSTART))
     }
 }

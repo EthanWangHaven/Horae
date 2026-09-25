@@ -5,11 +5,16 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -24,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -31,10 +37,14 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toSize
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.horae.app.ui.glass.LocalWallSize
 import com.horae.app.ui.glass.Wall
 import com.horae.app.ui.glass.liquidGlass
+import com.horae.app.ui.theme.AccentBlue
 import com.horae.app.ui.theme.Ink
 import com.horae.app.ui.theme.SubText
 
@@ -167,4 +177,75 @@ fun AccentTextButton(
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 6.dp),
     )
+}
+
+/** 通用玻璃弹窗容器：与看板日程详情弹窗同款样式（90% 宽 + 80% 白半透明 + 22dp 圆角）；
+ * compact = true 时上下内边距更小，用于选项/确认类小弹窗 */
+@Composable
+fun GlassDialog(
+    onDismiss: () -> Unit,
+    compact: Boolean = false,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickableNoRipple(onDismiss),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 32.dp)
+                    .fillMaxWidth(0.9f)
+                    .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(22.dp))
+                    .clickableNoRipple { } // 吞掉面板内点击
+                    .padding(horizontal = 20.dp, vertical = if (compact) 12.dp else 18.dp),
+            ) {
+                content()
+            }
+        }
+    }
+}
+
+/** 弹窗底部操作行：取消 + 可选确认按钮（confirmColor 可定制，如删除红色） */
+@Composable
+fun DialogActions(
+    onCancel: () -> Unit,
+    confirmText: String? = null,
+    onConfirm: () -> Unit = {},
+    confirmColor: Color = AccentBlue,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Spacer(Modifier.weight(1f))
+        Text(
+            text = "取消",
+            color = Ink,
+            fontSize = 15.sp,
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .clickableNoRipple(onCancel)
+                .padding(horizontal = 14.dp, vertical = 9.dp),
+        )
+        if (confirmText != null) {
+            Spacer(Modifier.width(10.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(confirmColor)
+                    .clickableNoRipple(onConfirm)
+                    .padding(horizontal = 20.dp, vertical = 9.dp),
+            ) {
+                Text(
+                    text = confirmText,
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+    }
 }

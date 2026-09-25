@@ -23,6 +23,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -31,8 +35,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.horae.app.data.AppSettings
+import com.horae.app.ui.common.DialogActions
+import com.horae.app.ui.common.GlassDialog
 import com.horae.app.ui.common.GlassScreenRoot
 import com.horae.app.ui.common.clickableNoRipple
+import com.horae.app.ui.common.strings
 import com.horae.app.ui.glass.BoardThemes
 import com.horae.app.ui.glass.liquidGlass
 import com.horae.app.ui.theme.AccentBlue
@@ -42,9 +49,12 @@ import com.horae.app.ui.theme.SubText
 
 private const val SENS_LEVELS = 5
 
-/** 设置页：看板主题 / 纵轴显示范围 / 滑动灵敏度 */
+/** 设置页：看板主题 / 纵轴显示范围 / 滑动灵敏度 / 语言 / 关于 */
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
+    val s = strings()
+    val lang = AppSettings.languageIndex
+    var langPickerOpen by remember { mutableStateOf(false) }
     GlassScreenRoot {
         Column(
             modifier = Modifier
@@ -53,29 +63,28 @@ fun SettingsScreen(onBack: () -> Unit) {
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            // ---------- 顶部：返回 + 标题 ----------
+            // ---------- 顶部：返回 + 标题（胶囊条宽度包裹内容） ----------
             Row(
                 modifier = Modifier
                     .padding(top = 8.dp)
-                    .fillMaxWidth()
                     .liquidGlass(shape = RoundedCornerShape(24.dp), tintAlpha = 0.6f, blurRadius = 20.dp)
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "返回",
+                    contentDescription = s.back,
                     tint = AccentBlue,
                     modifier = Modifier.clickableNoRipple(onBack),
                 )
                 Spacer(Modifier.width(14.dp))
-                Text(text = "设置", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Ink)
+                Text(text = s.settings, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Ink)
             }
 
             Spacer(Modifier.height(14.dp))
 
             // ---------- 看板主题 ----------
-            SettingsCard(title = "看板主题") {
+            SettingsCard(title = s.boardTheme) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     BoardThemes.forEachIndexed { i, theme ->
                         val selected = AppSettings.themeIndex == i
@@ -105,7 +114,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                                 }
                             }
                             Text(
-                                text = theme.name,
+                                text = theme.displayName(lang),
                                 fontSize = 11.sp,
                                 color = if (selected) Ink else SubText,
                                 modifier = Modifier.padding(top = 4.dp),
@@ -118,16 +127,16 @@ fun SettingsScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(12.dp))
 
             // ---------- 纵轴显示范围 ----------
-            SettingsCard(title = "纵轴显示范围") {
+            SettingsCard(title = s.axisRange) {
                 AxisRangeRow(
-                    label = "开始",
+                    label = s.start,
                     hour = AppSettings.axisStartHour,
                     onMinus = { AppSettings.updateAxisRange(AppSettings.axisStartHour - 1, AppSettings.axisEndHour) },
                     onPlus = { AppSettings.updateAxisRange(AppSettings.axisStartHour + 1, AppSettings.axisEndHour) },
                 )
                 Spacer(Modifier.height(6.dp))
                 AxisRangeRow(
-                    label = "结束",
+                    label = s.end,
                     hour = AppSettings.axisEndHour,
                     onMinus = { AppSettings.updateAxisRange(AppSettings.axisStartHour, AppSettings.axisEndHour - 1) },
                     onPlus = { AppSettings.updateAxisRange(AppSettings.axisStartHour, AppSettings.axisEndHour + 1) },
@@ -137,9 +146,9 @@ fun SettingsScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(12.dp))
 
             // ---------- 滑动灵敏度 ----------
-            SettingsCard(title = "滑动灵敏度") {
+            SettingsCard(title = s.sensitivity) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = "低", fontSize = 12.sp, color = SubText)
+                    Text(text = s.low, fontSize = 12.sp, color = SubText)
                     Spacer(Modifier.width(10.dp))
                     Row(
                         modifier = Modifier.weight(1f).height(40.dp),
@@ -170,25 +179,46 @@ fun SettingsScreen(onBack: () -> Unit) {
                         }
                     }
                     Spacer(Modifier.width(10.dp))
-                    Text(text = "高", fontSize = 12.sp, color = SubText)
+                    Text(text = s.high, fontSize = 12.sp, color = SubText)
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // ---------- 语言 ----------
+            SettingsCard(title = s.language) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickableNoRipple { langPickerOpen = true },
+                ) {
+                    Text(
+                        text = if (lang == 1) "English" else "中文",
+                        fontSize = 15.sp,
+                        color = AccentBlue,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(text = "›", fontSize = 18.sp, color = SubText)
                 }
             }
 
             Spacer(Modifier.height(12.dp))
 
             // ---------- 关于 ----------
-            SettingsCard(title = "关于") {
+            SettingsCard(title = s.about) {
                 Column {
-                    Text(text = "作者", fontSize = 13.sp, color = SubText)
+                    Text(text = s.author, fontSize = 13.sp, color = SubText)
                     Text(
-                        text = "wangce",
+                        text = s.authorName,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Ink,
                         modifier = Modifier.padding(top = 3.dp),
                     )
                     Spacer(Modifier.height(10.dp))
-                    Text(text = "开源地址", fontSize = 13.sp, color = SubText)
+                    Text(text = s.openSource, fontSize = 13.sp, color = SubText)
                     Text(
                         text = "https://github.com/EthanWangHaven/Horae",
                         fontSize = 13.sp,
@@ -199,6 +229,31 @@ fun SettingsScreen(onBack: () -> Unit) {
             }
 
             Spacer(Modifier.height(40.dp))
+        }
+    }
+
+    // ---------- 语言选择弹窗（与其他弹窗统一玻璃风格） ----------
+    if (langPickerOpen) {
+        GlassDialog(onDismiss = { langPickerOpen = false }) {
+            Text(text = s.language, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+            Spacer(Modifier.height(10.dp))
+            listOf(0 to "中文", 1 to "English").forEach { (idx, label) ->
+                val selected = AppSettings.languageIndex == idx
+                Text(
+                    text = if (selected) "✓ $label" else label,
+                    color = if (selected) AccentBlue else Ink,
+                    fontSize = 16.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickableNoRipple {
+                            AppSettings.updateLanguageIndex(idx)
+                            langPickerOpen = false
+                        }
+                        .padding(vertical = 11.dp),
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            DialogActions(onCancel = { langPickerOpen = false })
         }
     }
 }

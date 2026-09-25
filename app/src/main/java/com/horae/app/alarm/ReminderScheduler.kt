@@ -9,7 +9,9 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import com.horae.app.R
+import com.horae.app.data.AppSettings
 import com.horae.app.logic.ScheduleLogic
+import com.horae.app.ui.common.appStrings
 import kotlinx.coroutines.runBlocking
 import java.time.LocalDateTime
 
@@ -19,13 +21,23 @@ const val EXTRA_SCHEDULE_ID = "schedule_id"
 object ReminderScheduler {
 
     fun ensureChannel(context: Context) {
+        // 通知可能由广播接收器触发（进程冷启动），先确保设置已加载
+        AppSettings.ensureLoaded(context)
+        val s = appStrings(AppSettings.languageIndex)
         val nm = context.getSystemService(NotificationManager::class.java)
-        val channel = NotificationChannel(
-            CHANNEL_ID, "日程提醒", NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = "日程开始前的提醒通知"
+        val existing = nm.getNotificationChannel(CHANNEL_ID)
+        // 语言变化后重建通知渠道以更新名称
+        if (existing != null && existing.name.toString() != s.notifChannelName) {
+            nm.deleteNotificationChannel(CHANNEL_ID)
         }
-        nm.createNotificationChannel(channel)
+        if (nm.getNotificationChannel(CHANNEL_ID) == null) {
+            val channel = NotificationChannel(
+                CHANNEL_ID, s.notifChannelName, NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = s.notifChannelDesc
+            }
+            nm.createNotificationChannel(channel)
+        }
     }
 
     private fun pendingIntent(context: Context, scheduleId: Long): PendingIntent {
@@ -71,16 +83,16 @@ class ReminderReceiver : BroadcastReceiver() {
                     com.horae.app.data.AppDatabase.get(context).scheduleDao().getById(id)
                 }
                 if (schedule != null) {
+                    val s = appStrings(AppSettings.languageIndex)
                     val start = ScheduleLogic.toLocal(schedule.startTime)
                     val text = buildString {
-                        append(ScheduleLogic.hm(start))
-                        if (!schedule.allDay) append(" 开始")
+                        append(s.notifStartFmt(ScheduleLogic.hm(start)))
                         schedule.location?.takeIf { it.isNotBlank() }?.let { append(" · ").append(it) }
                     }
                     val nm = context.getSystemService(NotificationManager::class.java)
                     val notification = NotificationCompat.Builder(context, CHANNEL_ID)
                         .setSmallIcon(R.drawable.ic_stat_clock)
-                        .setContentTitle(schedule.title.ifBlank { "日程提醒" })
+                        .setContentTitle(schedule.title.ifBlank { s.notifFallbackTitle })
                         .setContentText(text)
                         .setAutoCancel(true)
                         .build()

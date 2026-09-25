@@ -57,6 +57,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,9 +86,12 @@ import com.horae.app.data.AppSettings
 import com.horae.app.logic.DayOccurrences
 import com.horae.app.logic.Occurrence
 import com.horae.app.logic.ScheduleLogic
+import com.horae.app.ui.common.DialogActions
+import com.horae.app.ui.common.GlassDialog
 import com.horae.app.ui.common.GlassIconButton
 import com.horae.app.ui.common.GlassScreenRoot
 import com.horae.app.ui.common.clickableNoRipple
+import com.horae.app.ui.common.strings
 import com.horae.app.ui.glass.liquidGlass
 import com.horae.app.ui.theme.AccentBlue
 import com.horae.app.ui.theme.Hairline
@@ -107,7 +112,6 @@ private const val BASE_PAGE = 2000
 private const val AXIS_WIDTH_DP = 52
 private const val DAY_COLUMN_COUNT = 7
 
-private val detailDateFmt = DateTimeFormatter.ofPattern("yyyy/M/d")
 private val detailTimeFmt = DateTimeFormatter.ofPattern("HH:mm")
 
 @Composable
@@ -119,6 +123,7 @@ fun BoardScreen(
     onSettings: () -> Unit,
 ) {
     val context = LocalContext.current
+    val s = strings()
     val schedules by AppDatabase.get(context).scheduleDao()
         .observeAll().collectAsState(initial = emptyList())
 
@@ -150,6 +155,10 @@ fun BoardScreen(
 
     // 顶部标题栏折叠状态（记住上次状态，持久化到 AppSettings）
     var headerCollapsed by remember { mutableStateOf(AppSettings.boardHeaderCollapsed) }
+
+    // 日程条显示溢出提示（null=未选择 0=自动适配 1=仍然显示；进程内记住，重启后重新询问）
+    var overflowMode by rememberSaveable { mutableStateOf<Int?>(null) }
+    var showOverflowDialog by rememberSaveable { mutableStateOf(false) }
 
     // 默认竖直滚动位置（7:00 横线贴顶，8:00 字样刚好露出）
     var defaultScrollPx by remember { mutableStateOf(0f) }
@@ -262,6 +271,10 @@ fun BoardScreen(
                                 hourHeight = hourHeight,
                                 startHour = startHour,
                                 endHour = endHour,
+                                overflowShowAll = overflowMode == 1,
+                                onOverflowDetected = {
+                                    if (overflowMode == null && !showOverflowDialog) showOverflowDialog = true
+                                },
                                 onAddAt = { day, hour ->
                                     val millis = day.atTime(hour, 0)
                                         .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -299,7 +312,7 @@ fun BoardScreen(
             ) {
                 Column {
                 Text(
-                    text = "回到今天",
+                    text = s.backToToday,
                     fontSize = 15.sp,
                     color = Ink,
                     modifier = Modifier
@@ -314,7 +327,7 @@ fun BoardScreen(
                         .padding(horizontal = 18.dp, vertical = 10.dp),
                 )
                 Text(
-                    text = "搜索",
+                    text = s.search,
                     fontSize = 15.sp,
                     color = Ink,
                     modifier = Modifier
@@ -326,7 +339,7 @@ fun BoardScreen(
                         .padding(horizontal = 18.dp, vertical = 10.dp),
                 )
                 Text(
-                    text = "设置",
+                    text = s.settings,
                     fontSize = 15.sp,
                     color = Ink,
                     modifier = Modifier
@@ -338,6 +351,32 @@ fun BoardScreen(
                         .padding(horizontal = 18.dp, vertical = 10.dp),
                 )
                 }
+            }
+        }
+
+        // ---------- 日程条显示溢出提示 ----------
+        if (showOverflowDialog) {
+            GlassDialog(
+                onDismiss = {
+                    showOverflowDialog = false
+                    if (overflowMode == null) overflowMode = 0
+                },
+            ) {
+                Text(text = s.overflowTitle, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                Spacer(Modifier.height(10.dp))
+                Text(text = s.overflowMsg, fontSize = 14.sp, color = SubText, lineHeight = 20.sp)
+                Spacer(Modifier.height(14.dp))
+                DialogActions(
+                    onCancel = {
+                        showOverflowDialog = false
+                        overflowMode = 0
+                    },
+                    confirmText = s.showAnyway,
+                    onConfirm = {
+                        showOverflowDialog = false
+                        overflowMode = 1
+                    },
+                )
             }
         }
 
@@ -360,7 +399,7 @@ fun BoardScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = occ.schedule.title.ifBlank { "日程" },
+                            text = occ.schedule.title.ifBlank { s.scheduleFallback },
                             fontSize = 19.sp,
                             fontWeight = FontWeight.Bold,
                             color = Ink,
@@ -382,18 +421,18 @@ fun BoardScreen(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Edit,
-                                contentDescription = "编辑",
+                                contentDescription = s.edit,
                                 tint = AccentBlue,
                                 modifier = Modifier.size(17.dp),
                             )
                         }
                     }
-                    DetailField(label = "时间", value = detailTimeString(occ))
+                    DetailField(label = s.timeLabel, value = detailTimeString(occ, AppSettings.languageIndex, s.allDay))
                     occ.schedule.location?.takeIf { it.isNotBlank() }?.let {
-                        DetailField(label = "地点", value = it)
+                        DetailField(label = s.locationLabel, value = it)
                     }
                     occ.schedule.note?.takeIf { it.isNotBlank() }?.let {
-                        DetailField(label = "备注", value = it)
+                        DetailField(label = s.noteLabel, value = it)
                     }
                 }
             }
@@ -410,6 +449,7 @@ private fun BoardHeader(
     onMenuAnchorChange: (Rect) -> Unit,
     onCollapse: () -> Unit,
 ) {
+    val s = strings()
     Row(
         modifier = Modifier
             .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -418,22 +458,24 @@ private fun BoardHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = ScheduleLogic.boardTitle(today),
-            fontSize = 26.sp,
+            text = ScheduleLogic.boardTitle(today, AppSettings.languageIndex),
+            // 英文日期较长，字号自适应缩小避免换行
+            fontSize = if (AppSettings.languageIndex == 1) 21.sp else 26.sp,
             fontWeight = FontWeight.Bold,
             color = Ink,
+            maxLines = 1,
             modifier = Modifier.weight(1f),
         )
         GlassIconButton(
             icon = Icons.Default.Add,
-            contentDescription = "添加日程",
+            contentDescription = s.addSchedule,
             onClick = onAdd,
             tint = AccentBlue,
         )
         Spacer(Modifier.width(7.dp))
         GlassIconButton(
             icon = Icons.Default.Menu,
-            contentDescription = "日程列表",
+            contentDescription = s.scheduleList,
             onClick = onOpenList,
         )
         Spacer(Modifier.width(7.dp))
@@ -442,14 +484,14 @@ private fun BoardHeader(
         ) {
             GlassIconButton(
                 icon = Icons.Default.MoreVert,
-                contentDescription = "更多",
+                contentDescription = s.more,
                 onClick = onMenuClick,
             )
         }
         Spacer(Modifier.width(7.dp))
         GlassIconButton(
             icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-            contentDescription = "收起标题栏",
+            contentDescription = s.collapseHeader,
             onClick = onCollapse,
         )
     }
@@ -463,6 +505,8 @@ private fun WeekHeaderRow(
     collapsed: Boolean = false,
     onExpand: () -> Unit = {},
 ) {
+    val s = strings()
+    val lang = AppSettings.languageIndex
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -492,7 +536,7 @@ private fun WeekHeaderRow(
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = "展开标题栏",
+                        contentDescription = s.expandHeader,
                         tint = AccentBlue,
                         modifier = Modifier.size(22.dp),
                     )
@@ -507,7 +551,7 @@ private fun WeekHeaderRow(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    text = listOf("一", "二", "三", "四", "五", "六", "日")[idx],
+                    text = ScheduleLogic.weekdayLetters(lang)[idx],
                     fontSize = 12.sp,
                     color = SubText,
                 )
@@ -545,6 +589,7 @@ private fun AllDayRow(
     axisWidth: Float,
     onClick: (Occurrence, LocalDate) -> Unit,
 ) {
+    val s = strings()
     val hasAllDay = weekOccurrences.any { it.allDay.isNotEmpty() }
     if (!hasAllDay) return
     Row(
@@ -560,7 +605,7 @@ private fun AllDayRow(
                 items.forEach { occ ->
                     val color = ScheduleColors[occ.schedule.colorIndex % ScheduleColors.size]
                     Text(
-                        text = occ.schedule.title.ifBlank { "全天" },
+                        text = occ.schedule.title.ifBlank { s.allDay },
                         fontSize = 10.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -619,6 +664,8 @@ private fun WeekGridPage(
     hourHeight: Float,
     startHour: Int,
     endHour: Int,
+    overflowShowAll: Boolean,
+    onOverflowDetected: () -> Unit,
     onAddAt: (LocalDate, Int) -> Unit,
     onOpenDetail: (Occurrence, LocalDate) -> Unit,
 ) {
@@ -685,6 +732,8 @@ private fun WeekGridPage(
                     y = top,
                     width = laneW,
                     height = blockHeight,
+                    overflowShowAll = overflowShowAll,
+                    onOverflowDetected = onOverflowDetected,
                     onClick = { onOpenDetail(occ, dayOcc.day) }, // f1: 点击 → 详情弹窗
                 )
             }
@@ -699,10 +748,31 @@ private fun ScheduleBlock(
     y: Float,
     width: Float,
     height: Float,
+    overflowShowAll: Boolean,
+    onOverflowDetected: () -> Unit,
     onClick: () -> Unit,
 ) {
     val density = LocalDensity.current
     val color = ScheduleColors[occ.schedule.colorIndex % ScheduleColors.size]
+    val sched = occ.schedule
+    val hasLocation = !sched.location.isNullOrBlank()
+    val extraCount = listOf(sched.showStartTime, sched.showEndTime, sched.showLocation && hasLocation).count { it }
+    // 粗略估算：额外行每行约 34px，基础（两行标题+内边距）约 90px
+    val canFit = height > 90f + extraCount * 34f
+    val renderStart = sched.showStartTime && (overflowShowAll || canFit)
+    val renderEnd = sched.showEndTime && (overflowShowAll || canFit)
+    val renderLocation = sched.showLocation && hasLocation && (overflowShowAll || canFit)
+    val hasExtras = renderStart || renderEnd || renderLocation
+    // 标题行数：显示附加行时按剩余高度自适应（每行标题约 35px、附加行约 28px），超出用 … 截断
+    val shownExtraLines = listOf(renderStart, renderEnd, renderLocation).count { it }
+    val titleMaxLines = when {
+        !hasExtras -> if (height > 80f) 3 else 2
+        else -> (((height - 22f) - shownExtraLines * 33f) / 36f).toInt().coerceIn(1, 2)
+    }
+    if (extraCount > 0 && !canFit) {
+        // 空间不足：提醒用户（每次会话仅提示一次，由调用方去重）
+        SideEffect { onOverflowDetected() }
+    }
     Box(
         modifier = Modifier
             .offset { IntOffset(x.roundToInt(), y.roundToInt()) }
@@ -721,20 +791,46 @@ private fun ScheduleBlock(
     ) {
         Column {
             Text(
-                text = occ.schedule.title.ifBlank { "日程" },
+                text = sched.title.ifBlank { "日程" },
                 fontSize = 11.sp,
                 lineHeight = 13.sp,
                 color = Color.White,
                 fontWeight = FontWeight.SemiBold,
-                maxLines = if (height > 80f) 3 else 2,
+                maxLines = titleMaxLines,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (height > 90f) {
+            if (renderStart) {
                 Text(
                     text = ScheduleLogic.hm(occ.start),
                     fontSize = 10.sp,
+                    lineHeight = 12.sp,
                     color = Color.White.copy(alpha = 0.85f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+            // 结束时间显示在开始时间下方（不加 - 连接）
+            if (renderEnd) {
+                Text(
+                    text = ScheduleLogic.hm(occ.end),
+                    fontSize = 10.sp,
+                    lineHeight = 12.sp,
+                    color = Color.White.copy(alpha = 0.85f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = if (renderStart) 1.dp else 2.dp),
+                )
+            }
+            if (renderLocation) {
+                Text(
+                    text = sched.location.orEmpty(),
+                    fontSize = 10.sp,
+                    lineHeight = 12.sp,
+                    color = Color.White.copy(alpha = 0.85f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 1.dp),
                 )
             }
         }
@@ -756,17 +852,18 @@ private fun DetailField(label: String, value: String) {
 }
 
 /** 详情弹窗时间文案 */
-private fun detailTimeString(occ: Occurrence): String {
+private fun detailTimeString(occ: Occurrence, lang: Int, allDayText: String): String {
     val s = occ.start
     val e = occ.end
     return if (occ.schedule.allDay) {
-        if (s.toLocalDate() == e.toLocalDate()) "${s.format(detailDateFmt)} 全天"
-        else "${s.format(detailDateFmt)} – ${e.format(detailDateFmt)} 全天"
+        if (s.toLocalDate() == e.toLocalDate())
+            "${ScheduleLogic.detailDate(s.toLocalDate(), lang)} $allDayText"
+        else "${ScheduleLogic.detailDate(s.toLocalDate(), lang)} – ${ScheduleLogic.detailDate(e.toLocalDate(), lang)} $allDayText"
     } else {
         if (s.toLocalDate() == e.toLocalDate())
-            "${s.format(detailDateFmt)} ${s.format(detailTimeFmt)} – ${e.format(detailTimeFmt)}"
+            "${ScheduleLogic.detailDate(s.toLocalDate(), lang)} ${s.format(detailTimeFmt)} – ${e.format(detailTimeFmt)}"
         else
-            "${s.format(detailDateFmt)} ${s.format(detailTimeFmt)} – ${e.format(detailDateFmt)} ${e.format(detailTimeFmt)}"
+            "${ScheduleLogic.detailDate(s.toLocalDate(), lang)} ${s.format(detailTimeFmt)} – ${ScheduleLogic.detailDate(e.toLocalDate(), lang)} ${e.format(detailTimeFmt)}"
     }
 }
 

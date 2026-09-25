@@ -51,4 +51,10 @@ data class ScheduleEntity(
     val remindMinutes: Int = -1,
     val note: String? = null,
     val colorIndex: Int = 0,
+    /** 看板条上显示开始时间 */
+    val showStartTime: Boolean = true,
+    /** 看板条上显示结束时间（显示在开始时间下方） */
+    val showEndTime: Boolean = false,
+    /** 看板条上显示地点 */
+    val showLocation: Boolean = false,
 )

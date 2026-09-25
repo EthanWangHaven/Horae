@@ -38,8 +38,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.horae.app.data.AppDatabase
 import com.horae.app.data.ScheduleEntity
+import com.horae.app.logic.ScheduleLogic
 import com.horae.app.ui.common.GlassScreenRoot
 import com.horae.app.ui.common.clickableNoRipple
+import com.horae.app.ui.common.strings
 import com.horae.app.ui.glass.liquidGlass
 import com.horae.app.ui.theme.AccentBlue
 import com.horae.app.ui.theme.Ink
@@ -61,6 +63,8 @@ fun SearchScreen(
     onEdit: (scheduleId: Long, startMillis: Long) -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val s = strings()
+    val lang = com.horae.app.data.AppSettings.languageIndex
     val schedules by AppDatabase.get(context).scheduleDao()
         .observeAll().collectAsState(initial = emptyList())
     var query by remember { mutableStateOf("") }
@@ -107,7 +111,7 @@ fun SearchScreen(
                 Spacer(Modifier.width(8.dp))
                 Box(modifier = Modifier.weight(1f)) {
                     if (query.isEmpty()) {
-                        Text(text = "搜索标题、地点、备注", fontSize = 15.sp, color = SubText)
+                        Text(text = s.searchPlaceholder, fontSize = 15.sp, color = SubText)
                     }
                     BasicTextField(
                         value = query,
@@ -124,13 +128,13 @@ fun SearchScreen(
 
             // ---------- 结果列表 ----------
             when {
-                query.trim().isEmpty() -> HintText("输入关键词搜索日程")
-                results.isEmpty() -> HintText("无匹配日程")
+                query.trim().isEmpty() -> HintText(s.searchHint)
+                results.isEmpty() -> HintText(s.searchNoResult)
                 else -> LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    items(results, key = { it.id }) { s ->
-                        SearchResultCard(schedule = s, onClick = { onEdit(s.id, s.startTime) })
+                    items(results, key = { it.id }) { s2 ->
+                        SearchResultCard(schedule = s2, lang = lang, s = s, onClick = { onEdit(s2.id, s2.startTime) })
                     }
                     item { Spacer(Modifier.height(80.dp)) }
                 }
@@ -151,7 +155,12 @@ private fun HintText(text: String) {
 }
 
 @Composable
-private fun SearchResultCard(schedule: ScheduleEntity, onClick: () -> Unit) {
+private fun SearchResultCard(
+    schedule: ScheduleEntity,
+    lang: Int,
+    s: com.horae.app.ui.common.AppStrings,
+    onClick: () -> Unit,
+) {
     val color = ScheduleColors[schedule.colorIndex % ScheduleColors.size]
     val zone = ZoneId.systemDefault()
     val start = LocalDateTime.ofInstant(Instant.ofEpochMilli(schedule.startTime), zone)
@@ -176,8 +185,12 @@ private fun SearchResultCard(schedule: ScheduleEntity, onClick: () -> Unit) {
                 fontWeight = FontWeight.SemiBold,
                 color = Ink,
             )
-            val dow = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")[day.dayOfWeek.value - 1]
-            Text(text = dow, fontSize = 12.sp, color = SubText, modifier = Modifier.padding(top = 2.dp))
+            Text(
+                text = ScheduleLogic.weekdayHan(day, lang),
+                fontSize = 12.sp,
+                color = SubText,
+                modifier = Modifier.padding(top = 2.dp),
+            )
         }
 
         Box(
@@ -191,14 +204,14 @@ private fun SearchResultCard(schedule: ScheduleEntity, onClick: () -> Unit) {
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = schedule.title.ifBlank { "日程" },
+                text = schedule.title.ifBlank { s.scheduleFallback },
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Ink,
                 maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
-            val timeText = if (schedule.allDay) "全天"
+            val timeText = if (schedule.allDay) s.allDay
             else "${start.format(timeFmt)} – ${end.format(timeFmt)}"
             Text(text = timeText, fontSize = 13.sp, color = SubText, modifier = Modifier.padding(top = 2.dp))
             schedule.location?.takeIf { it.isNotBlank() }?.let {

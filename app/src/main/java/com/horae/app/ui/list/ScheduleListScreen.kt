@@ -37,6 +37,7 @@ import com.horae.app.logic.DayOccurrences
 import com.horae.app.logic.Occurrence
 import com.horae.app.logic.ScheduleLogic
 import com.horae.app.ui.common.clickableNoRipple
+import com.horae.app.ui.common.strings
 import com.horae.app.ui.glass.liquidGlass
 import com.horae.app.ui.theme.AccentBlue
 import com.horae.app.ui.theme.Ink
@@ -53,6 +54,8 @@ fun ScheduleListScreen(
     onEdit: (scheduleId: Long, dayMillis: Long) -> Unit,
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val s = strings()
+    val lang = com.horae.app.data.AppSettings.languageIndex
     val schedules by AppDatabase.get(context).scheduleDao()
         .observeAll().collectAsState(initial = emptyList())
 
@@ -96,6 +99,8 @@ fun ScheduleListScreen(
         ) {
             ListHeader(
                 day = selectedDay,
+                lang = lang,
+                backDesc = s.back,
                 onBack = onBack,
                 onPrev = { selectedDay = selectedDay.minusDays(1) },
                 onNext = { selectedDay = selectedDay.plusDays(1) },
@@ -105,11 +110,13 @@ fun ScheduleListScreen(
 
             LazyColumn(modifier = Modifier.weight(1f)) {
                 if (items.isEmpty()) {
-                    item { EmptyCard() }
+                    item { EmptyCard(s) }
                 } else {
                     items(items, key = { "${it.schedule.id}_${it.start}" }) { occ ->
                         ScheduleCard(
                             occ = occ,
+                            lang = lang,
+                            s = s,
                             onClick = { onEdit(occ.schedule.id, ScheduleLogic.toMillis(selectedDay.atStartOfDay())) },
                         )
                         Spacer(Modifier.height(10.dp))
@@ -137,7 +144,7 @@ fun ScheduleListScreen(
             )
             Spacer(Modifier.width(6.dp))
             Text(
-                text = "添加日程",
+                text = s.addSchedule,
                 color = AccentBlue,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -149,6 +156,8 @@ fun ScheduleListScreen(
 @Composable
 private fun ListHeader(
     day: LocalDate,
+    lang: Int,
+    backDesc: String,
     onBack: () -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit,
@@ -163,20 +172,20 @@ private fun ListHeader(
     ) {
         Icon(
             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-            contentDescription = "返回",
+            contentDescription = backDesc,
             tint = AccentBlue,
             modifier = Modifier.clickableNoRipple(onBack),
         )
         Spacer(Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = ScheduleLogic.listTitle(day),
+                text = ScheduleLogic.listTitle(day, lang),
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 color = Ink,
             )
             Text(
-                text = "${ScheduleLogic.weekdayHan(day)} · 第 ${ScheduleLogic.weekNumber(day)} 周",
+                text = ScheduleLogic.weekSubLabel(day, lang),
                 fontSize = 12.sp,
                 color = SubText,
                 modifier = Modifier.padding(top = 2.dp),
@@ -203,7 +212,12 @@ private fun DaySwitchText(text: String, onClick: () -> Unit) {
 
 /** 单条日程卡片（图1）：时间列 + 色条 + 标题/位置/重复 */
 @Composable
-private fun ScheduleCard(occ: Occurrence, onClick: () -> Unit) {
+private fun ScheduleCard(
+    occ: Occurrence,
+    lang: Int,
+    s: com.horae.app.ui.common.AppStrings,
+    onClick: () -> Unit,
+) {
     val color = ScheduleColors[occ.schedule.colorIndex % ScheduleColors.size]
     Row(
         modifier = Modifier
@@ -218,7 +232,7 @@ private fun ScheduleCard(occ: Occurrence, onClick: () -> Unit) {
             horizontalAlignment = Alignment.Start,
         ) {
             if (occ.schedule.allDay) {
-                Text(text = "全天", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                Text(text = s.allDay, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Ink)
             } else {
                 Text(
                     text = ScheduleLogic.hm(occ.start),
@@ -227,7 +241,7 @@ private fun ScheduleCard(occ: Occurrence, onClick: () -> Unit) {
                     color = Ink,
                 )
                 val endText = if (occ.end.toLocalDate().isAfter(occ.start.toLocalDate()))
-                    "次日 ${ScheduleLogic.hm(occ.end.toLocalTime())}" else ScheduleLogic.hm(occ.end)
+                    "${s.nextDay} ${ScheduleLogic.hm(occ.end.toLocalTime())}" else ScheduleLogic.hm(occ.end)
                 Text(text = endText, fontSize = 12.sp, color = SubText, modifier = Modifier.padding(top = 2.dp))
             }
         }
@@ -243,7 +257,7 @@ private fun ScheduleCard(occ: Occurrence, onClick: () -> Unit) {
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = occ.schedule.title.ifBlank { "日程" },
+                text = occ.schedule.title.ifBlank { s.scheduleFallback },
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Ink,
@@ -253,7 +267,7 @@ private fun ScheduleCard(occ: Occurrence, onClick: () -> Unit) {
             }
             if (occ.schedule.repeatType != com.horae.app.data.RepeatType.NONE) {
                 Text(
-                    text = ScheduleLogic.repeatLabel(occ.schedule.repeatType),
+                    text = ScheduleLogic.repeatLabel(occ.schedule.repeatType, lang),
                     fontSize = 12.sp,
                     color = SubText,
                     modifier = Modifier.padding(top = 2.dp),
@@ -265,7 +279,7 @@ private fun ScheduleCard(occ: Occurrence, onClick: () -> Unit) {
 
 /** 空状态占位卡（图1 中部的占位） */
 @Composable
-private fun EmptyCard() {
+private fun EmptyCard(s: com.horae.app.ui.common.AppStrings) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -275,14 +289,14 @@ private fun EmptyCard() {
     ) {
         Text(text = "◦ ◦ ◦", fontSize = 22.sp, color = SubText)
         Text(
-            text = "这一天还没有日程",
+            text = s.emptyTitle,
             fontSize = 15.sp,
             color = Ink,
             fontWeight = FontWeight.Medium,
             modifier = Modifier.padding(top = 10.dp),
         )
         Text(
-            text = "点击下方「添加日程」开始安排",
+            text = s.emptyHint,
             fontSize = 12.sp,
             color = SubText,
             modifier = Modifier.padding(top = 4.dp),

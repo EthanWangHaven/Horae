@@ -167,59 +167,93 @@ object ScheduleLogic {
     // ---------- 展示格式化 ----------
 
     private val boardTitleFmt = DateTimeFormatter.ofPattern("yyyy/M/d", Locale.CHINA)
+    private val boardTitleFmtEn = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
     private val listTitleFmt = DateTimeFormatter.ofPattern("yyyy/MM/dd", Locale.CHINA)
+    private val listTitleFmtEn = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
+    private val detailDateFmt = DateTimeFormatter.ofPattern("yyyy/M/d", Locale.CHINA)
+    private val detailDateFmtEn = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH)
     private val hmFmt = DateTimeFormatter.ofPattern("HH:mm")
 
-    fun boardTitle(day: LocalDate): String = day.format(boardTitleFmt)
-    fun listTitle(day: LocalDate): String = day.format(listTitleFmt)
+    fun detailDate(day: java.time.LocalDate, lang: Int = 0): String =
+        day.format(if (lang == 1) detailDateFmtEn else detailDateFmt)
+
+    fun boardTitle(day: LocalDate, lang: Int = 0): String =
+        day.format(if (lang == 1) boardTitleFmtEn else boardTitleFmt)
+    fun listTitle(day: LocalDate, lang: Int = 0): String =
+        day.format(if (lang == 1) listTitleFmtEn else listTitleFmt)
     fun hm(t: LocalTime): String = t.format(hmFmt)
     fun hm(dt: LocalDateTime): String = dt.format(hmFmt)
 
-    fun weekdayHan(day: LocalDate): String =
-        when (day.dayOfWeek) {
+    /** 星期短名：周一..周日 / Mon..Sun */
+    fun weekdayHan(day: LocalDate, lang: Int = 0): String = when (lang) {
+        1 -> listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")[day.dayOfWeek.value - 1]
+        else -> when (day.dayOfWeek) {
             DayOfWeek.MONDAY -> "周一"; DayOfWeek.TUESDAY -> "周二"
             DayOfWeek.WEDNESDAY -> "周三"; DayOfWeek.THURSDAY -> "周四"
             DayOfWeek.FRIDAY -> "周五"; DayOfWeek.SATURDAY -> "周六"
             else -> "周日"
         }
+    }
+
+    /** 看板星期表头单字：一..日 / M..S */
+    fun weekdayLetters(lang: Int = 0): List<String> =
+        if (lang == 1) listOf("M", "T", "W", "T", "F", "S", "S")
+        else listOf("一", "二", "三", "四", "五", "六", "日")
 
     fun weekNumber(day: LocalDate): Int =
         day.get(IsoFields.WEEK_OF_WEEK_BASED_YEAR)
 
-    fun weekLabel(day: LocalDate): String = "第 ${weekNumber(day)} 周 ${weekdayHan(day)}"
-
-    fun repeatLabel(type: Int): String = when (type) {
-        RepeatType.NONE -> "永不"
-        RepeatType.DAILY -> "每天"
-        RepeatType.WEEKLY -> "每周"
-        RepeatType.WEEKDAYS -> "工作日"
-        RepeatType.MONTHLY -> "每月"
-        RepeatType.CUSTOM -> "自定义"
-        else -> "永不"
+    fun weekLabel(day: LocalDate, lang: Int = 0): String = when (lang) {
+        1 -> "${weekdayHan(day, 1)} · Week ${weekNumber(day)}"
+        else -> "第 ${weekNumber(day)} 周 ${weekdayHan(day, 0)}"
     }
 
-    /** 自定义重复的显示文案：每 N 天/周/月/年 */
-    fun customRepeatLabel(freq: Int, interval: Int): String {
-        val unit = freqUnit(freq)
+    /** 列表页头部副标题：周五 · 第 39 周 / Fri · Week 39 */
+    fun weekSubLabel(day: LocalDate, lang: Int = 0): String = weekLabel(day, lang)
+
+    fun repeatLabel(type: Int, lang: Int = 0): String = when (type) {
+        RepeatType.NONE -> if (lang == 1) "Never" else "永不"
+        RepeatType.DAILY -> if (lang == 1) "Every day" else "每天"
+        RepeatType.WEEKLY -> if (lang == 1) "Every week" else "每周"
+        RepeatType.WEEKDAYS -> if (lang == 1) "Weekdays" else "工作日"
+        RepeatType.MONTHLY -> if (lang == 1) "Every month" else "每月"
+        RepeatType.CUSTOM -> if (lang == 1) "Custom" else "自定义"
+        else -> if (lang == 1) "Never" else "永不"
+    }
+
+    /** 自定义重复的显示文案：每 N 天/周/月/年 / Every N day(s) */
+    fun customRepeatLabel(freq: Int, interval: Int, lang: Int = 0): String {
+        if (lang == 1) {
+            val unit = when (freq) {
+                RepeatFreq.DAY -> "day"
+                RepeatFreq.WEEK -> "week"
+                RepeatFreq.MONTH -> "month"
+                RepeatFreq.YEAR -> "year"
+                else -> "week"
+            }
+            return if (interval <= 1) "Every $unit" else "Every $interval ${unit}s"
+        }
+        val unit = freqUnit(freq, 0)
         return if (interval <= 1) "每$unit" else "每 $interval $unit"
     }
 
-    fun freqUnit(freq: Int): String = when (freq) {
-        RepeatFreq.DAY -> "天"
-        RepeatFreq.WEEK -> "周"
-        RepeatFreq.MONTH -> "月"
-        RepeatFreq.YEAR -> "年"
-        else -> "周"
+    /** 频率单位：天/周/月/年 / Day/Week/Month/Year */
+    fun freqUnit(freq: Int, lang: Int = 0): String = when (freq) {
+        RepeatFreq.DAY -> if (lang == 1) "Day" else "天"
+        RepeatFreq.WEEK -> if (lang == 1) "Week" else "周"
+        RepeatFreq.MONTH -> if (lang == 1) "Month" else "月"
+        RepeatFreq.YEAR -> if (lang == 1) "Year" else "年"
+        else -> if (lang == 1) "Week" else "周"
     }
 
-    fun remindLabel(minutes: Int): String = when (minutes) {
-        -1 -> "无"
-        0 -> "准时"
-        5 -> "提前 5 分钟"
-        15 -> "提前 15 分钟"
-        30 -> "提前 30 分钟"
-        60 -> "提前 1 小时"
-        else -> "无"
+    fun remindLabel(minutes: Int, lang: Int = 0): String = when (minutes) {
+        -1 -> if (lang == 1) "None" else "无"
+        0 -> if (lang == 1) "On time" else "准时"
+        5 -> if (lang == 1) "5 min before" else "提前 5 分钟"
+        15 -> if (lang == 1) "15 min before" else "提前 15 分钟"
+        30 -> if (lang == 1) "30 min before" else "提前 30 分钟"
+        60 -> if (lang == 1) "1 hr before" else "提前 1 小时"
+        else -> if (lang == 1) "None" else "无"
     }
 
     val remindOptions = listOf(-1, 0, 5, 15, 30, 60)
