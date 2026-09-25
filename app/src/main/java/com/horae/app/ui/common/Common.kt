@@ -127,7 +127,7 @@ fun SettingsRow(
 ) {
     Row(
         modifier = modifier
-            .padding(vertical = 12.dp)
+            .padding(vertical = 10.dp)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         verticalAlignment = Alignment.CenterVertically,
     ) {

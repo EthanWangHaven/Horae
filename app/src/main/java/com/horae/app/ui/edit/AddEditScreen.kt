@@ -372,7 +372,7 @@ fun AddEditScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .liquidGlass(shape = RoundedCornerShape(20.dp), tintAlpha = 0.62f, blurRadius = 20.dp)
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
                 SettingsRow(
                     icon = null,
@@ -485,7 +485,12 @@ fun AddEditScreen(
             ) {
                 Text(text = s.color, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink)
                 Spacer(Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // 8 个颜色均匀排满整行
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     ScheduleColors.forEachIndexed { idx, c ->
                         Box(
                             modifier = Modifier
@@ -501,7 +506,6 @@ fun AddEditScreen(
                                 )
                                 .clickableNoRipple { colorIndex = idx },
                         )
-                        Spacer(Modifier.width(12.dp))
                     }
                 }
             }
@@ -512,7 +516,7 @@ fun AddEditScreen(
                     .fillMaxWidth()
                     .padding(top = 12.dp)
                     .liquidGlass(shape = RoundedCornerShape(20.dp), tintAlpha = 0.62f, blurRadius = 20.dp)
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
                 SettingsRow(
                     icon = null,

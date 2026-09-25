@@ -297,7 +297,7 @@ fun BoardScreen(
                     .matchParentSize()
                     .clickableNoRipple { menuOpen = false }
             )
-            // 大圆角玻璃面板，定位在「更多」按钮下方
+            // 大圆角弹窗面板：与日程详情弹窗同款样式（90% 宽思路 + 白底 80% 透明度）
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -308,7 +308,7 @@ fun BoardScreen(
                         )
                     }
                     .width(150.dp)
-                    .liquidGlass(shape = RoundedCornerShape(22.dp), tintAlpha = 0.72f, blurRadius = 24.dp)
+                    .background(Color.White.copy(alpha = 0.8f), RoundedCornerShape(22.dp))
                     .padding(vertical = 8.dp),
             ) {
                 Column {

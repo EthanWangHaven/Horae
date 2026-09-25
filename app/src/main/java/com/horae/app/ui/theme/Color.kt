@@ -16,4 +16,5 @@ val ScheduleColors = listOf(
     Color(0xFF30D158), // 绿
     Color(0xFF64D2FF), // 青
     Color(0xFFBF5AF2), // 紫
+    Color(0xFFA2845E), // 棕
 )
